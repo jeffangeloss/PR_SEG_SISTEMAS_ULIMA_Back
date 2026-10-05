@@ -1,0 +1,52 @@
+{
+  "name": "ulima-backend",
+  "version": "2.1.0",
+  "description": "Backend oficial de ULima++ - API REST para app universitaria Flutter",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/server.ts",
+    "build": "tsc",
+    "start": "bun run dist/server.js",
+    "test": "bun test",
+    "mut:jeff": "bunx stryker run stryker.jeff.conf.json",
+    "mut:mel": "bunx stryker run stryker.mel.conf.json",
+    "mut:sam": "bunx stryker run stryker.sam.conf.json",
+    "mut:julio": "bunx stryker run stryker.julio.conf.json",
+    "mut:nehemias": "bunx stryker run stryker.nehemias.conf.json",
+    "mut:ronald": "bunx stryker run stryker.ronald.conf.json",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun run src/db/migrate.ts",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "bun run src/db/seed/index.ts",
+    "db:apply": "bun run src/db/apply-migration.ts",
+    "db:stamp-baseline": "bun run src/db/stamp-baseline.ts",
+    "lab:bd:levantar": "bash scripts/laboratorio/levantar-bd.sh",
+    "lab:bd:reset": "bash scripts/laboratorio/levantar-bd.sh --reset",
+    "lab:bd:detener": "bash scripts/laboratorio/detener-bd.sh",
+    "lab:backend": "bash scripts/laboratorio/levantar-backend.sh"
+  },
+  "dependencies": {
+    "@aws-sdk/client-rds-data": "^3.1053.0",
+    "@hono/node-server": "^2.0.4",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.0",
+    "drizzle-orm": "^0.45.2",
+    "firebase-admin": "12.1.0",
+    "google-auth-library": "^10.7.0",
+    "hono": "^4.6.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.21.0",
+    "postgres": "^3.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "^9.6.1",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/bun": "latest",
+    "@types/jsonwebtoken": "^9.0.7",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.7.0"
+  }
+}

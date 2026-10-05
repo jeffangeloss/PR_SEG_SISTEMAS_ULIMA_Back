@@ -1,0 +1,179 @@
+# Runbook de Migraciones de Base de Datos
+
+Estado real auditado el 2026-07-05 y protocolo vigente hasta el fin del ciclo 2026-1.
+
+## Dónde vive la BD (verificado 2026-09-06)
+
+- **PostgreSQL 17.11 en Neon** (endpoint con *pooler*, región `us-east-1`). El host y las credenciales viven SOLO en `.env` (`DATABASE_URL`): **este repo es público**, así que no se escriben acá.
+- **Ya no es AWS RDS.** Las secciones históricas de abajo (y `docs/DATABASE.md`) hablan de "PostgreSQL 18.3 en AWS RDS": eso era cierto en julio de 2026 y dejó de serlo con la mudanza a Neon, que además bajó el major de 18 a 17. Se conservan tal cual como registro de lo que se auditó entonces.
+- **Cliente de `pg_dump`/`psql`**: el major del cliente debe ser **>= el del servidor (17)**. El `postgresql@16` de Homebrew **se niega** ("aborting because of server version mismatch"). El que sirve es `libpq`:
+  ```bash
+  brew install libpq
+  ```
+  Es *keg-only* (no se enlaza a `/opt/homebrew/bin` porque choca con `postgresql`), así que hay que invocarlo por ruta completa: `/opt/homebrew/opt/libpq/bin/pg_dump`.
+- **Red**: el wifi de la ULima bloquea el 5432. Todo lo de abajo requiere datos móviles.
+
+## Estado real de la BD (auditoría 2026-07-05, sobre la BD de entonces en AWS RDS)
+
+- La BD productiva (PostgreSQL 18 en AWS RDS) **coincide con `src/db/schema/schema.ts`**: 28/28 tablas tras aplicar la 0003, sin tablas sobrantes ni faltantes.
+- La tabla `__drizzle_migrations` **no existe** en la BD: ninguna migración se aplicó nunca vía `drizzle-kit migrate`; históricamente todo se aplicó a mano.
+- El journal (`drizzle/meta/_journal.json`) registra las entradas 0000 y 0002 **cuyos archivos SQL no existen** en `drizzle/`; el snapshot 0000 está obsoleto (describe tablas que nunca llegaron a la BD final). El journal es registro histórico, no fuente de verdad.
+- Consecuencia (histórica): `drizzle-kit generate` (diff automático) y `drizzle-kit migrate` producían resultados incorrectos o destructivos.
+
+## Re-baseline de Drizzle (TT04 — 2026-07-07)
+
+Para retomar el flujo oficial de Drizzle se hizo un **re-baseline**. Estado:
+
+- ✅ **Parte local (hecha, sin tocar la BD, reversible por git)**: se descartó el meta roto (journal con 0000/0002 sin SQL, snapshot 0000 obsoleto) y los `.sql` sueltos, y se regeneró desde `schema.ts` un único **`drizzle/0000_baseline.sql`** con `meta/_journal.json` y `meta/0000_snapshot.json` frescos. Verificado **sin drift**: `bun run db:generate` dice "No schema changes". El baseline contiene las **29 tablas** reales (incluye `advising_rsvp` de HU18). `bun run build` y `bun test` (54) en verde.
+- ⏳ **Parte en la BD (PENDIENTE — post-demo, requiere datos móviles)**: la BD viva ya tiene todo el esquema del baseline, así que **NO se re-ejecuta** ese SQL. Solo hay que **sellarlo** como aplicado:
+  ```bash
+  bun run db:stamp-baseline            # dry-run: muestra el baseline y su hash
+  bun run db:stamp-baseline -- --apply # crea drizzle.__drizzle_migrations y registra el baseline
+  ```
+  Drizzle decide qué aplicar por `created_at` (= `when` del journal); tras sellar, `db:migrate` omite el baseline y aplica solo lo nuevo.
+
+### Flujo oficial DESPUÉS de sellar (reemplaza al SQL manual)
+
+1. Editas `src/db/schema/schema.ts`.
+2. `bun run db:generate` → crea `drizzle/000N_nombre.sql` + actualiza el meta.
+3. Revisas el SQL en el PR (que siga siendo aditivo; nada destructivo).
+4. Con backup y en datos móviles: `bun run db:migrate` → aplica y registra en `__drizzle_migrations`. (Usa el migrador de `drizzle-orm` vía `src/db/migrate.ts`, no el CLI `drizzle-kit migrate`, que trata como error el NOTICE inofensivo `relation "__drizzle_migrations" already exists`.)
+5. `db:push` sigue **prohibido** siempre (puede generar DROPs).
+
+Mientras la BD no esté sellada, sigue vigente el protocolo manual de abajo (`db:apply`).
+
+## Protocolo manual (interino, hasta sellar el baseline)
+
+1. **`drizzle-kit generate`/`migrate` congelados. `db:push` prohibido siempre** (diffea contra un snapshot obsoleto y puede generar DROPs de objetos reales).
+2. Todo cambio de BD = **SQL aditivo escrito a mano**, numerado secuencialmente (`drizzle/000N_nombre.sql`), **dentro del PR** que lo necesita, con `IF NOT EXISTS` donde aplique. Solo `CREATE TABLE`, `ADD COLUMN` (nullable o con default) y `CREATE INDEX`; nada destructivo.
+3. **Orden estricto: el SQL se aplica en la BD ANTES del merge/deploy del código que lo usa.**
+4. **Una sola persona aplica** (Jeff), con backup previo (`pg_dump` de `libpq`, por ruta completa: `/opt/homebrew/opt/libpq/bin/pg_dump` — ver §Dónde vive la BD; el `pg_dump` de `postgresql@16` NO sirve), en transacción, y **avisa al equipo** con la evidencia de verificación (`to_regclass` + columnas + smoke test).
+5. Todo lo aplicado se registra en la tabla de abajo. Esa lista es el insumo del **re-baseline post-demo** (recrear el journal desde el esquema real y adoptar `drizzle-kit migrate` con `__drizzle_migrations`).
+6. **Freeze pre-demo:** nadie ejecuta DDL en las 48 horas previas a la exposición. Lo que no esté migrado 48h antes, no entra a la demo.
+
+## Registro de migraciones aplicadas
+
+| # | Archivo | Qué hace | Aplicada | Por | Verificación |
+|---|---|---|---|---|---|
+| 0001 | `0001_student_specialty_setup_completed.sql` | `student.specialty_setup_completed` | (histórico, junio 2026) | equipo | columna existe en BD ✔ |
+| 0003 | `0003_password_reset_token.sql` | Tabla `password_reset_token` + índice + FK (HU20) | 2026-07-05 | Jeff | `to_regclass` ✔, 7 columnas ✔, índice ✔, FK ✔, smoke test local ✔. Backup previo con `pg_dump` ✔ |
+| 0004 | `0004_advising_teacher_role.sql` | HU18: `teacher.user_id`; `section.jp_id` + CHECK + índice único parcial `uq_section_jp`; enum `advising_kind`; `course_advising_session.kind/session_date/capacity` + checks; **re-scope de `uq_course_advising_session_course/section` a `kind='recurring'`** + nuevo `uq_course_advising_session_extra`; tabla `advising_rsvp` + índice | 2026-07-06 | Jeff | Aplicada con `db:apply` + backup; smoke test de login docente/JP en prod ✔ |
+
+> Nota histórica: el journal viejo listaba 0000/0002 sin SQL y 0001/0003/0004 sueltos. Tras el re-baseline (2026-07-07) el journal tiene una sola entrada `0000_baseline` que representa TODO el esquema real; los `.sql` 0001/0003/0004 quedan en el historial de git. Los cambios futuros usan `db:generate` (numeración nueva 0001, 0002, …).
+
+### Aplicación de la 0004 (runbook)
+
+Requiere **datos móviles** (el wifi de la ULima bloquea el 5432). `DATABASE_URL`
+vive en `.env`, NO como variable de shell: hay que sourcearla. Los scripts
+`db:apply`/`db:seed:docentes` la leen solos vía `dotenv`; solo el backup con
+`pg_dump` necesita exportarla.
+
+Paso 1 — backup (dos comandos):
+```bash
+export DATABASE_URL=$(grep '^DATABASE_URL=' .env | cut -d= -f2-)
+```
+```bash
+/opt/homebrew/opt/libpq/bin/pg_dump "$DATABASE_URL" > backup_pre_0004_$(date +%Y%m%d).sql
+```
+
+Paso 2 — aplicar la migración (bun, transaccional, reusa la conexión de la app; no depende de psql/SSL):
+```bash
+bun run db:apply drizzle/0004_advising_teacher_role.sql
+```
+
+Paso 3 — seed de docentes, primero el plan y luego aplicar:
+```bash
+bun run db:seed:docentes
+```
+```bash
+bun run db:seed:docentes -- --apply
+```
+
+Paso 4 — verificar en la BD, y recién entonces mergear/deployar el código HU18.
+
+⚠️ El único paso no puramente aditivo es el `DROP INDEX`/`CREATE INDEX` de los
+dos únicos de asesorías (metadato, sin pérdida de filas): se reconstruyen con la
+condición `kind='recurring'`. Todo corre en una transacción: si algo falla,
+ROLLBACK y la BD queda intacta.
+
+> Alternativa a bun para el paso 2 (si prefieres psql), con la URL ya exportada
+> arriba: `/opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -1 -f drizzle/0004_advising_teacher_role.sql`
+
+## Verificación rápida del despliegue
+
+`GET /version` en el backend devuelve el SHA del commit desplegado (Vercel inyecta `VERCEL_GIT_COMMIT_SHA`). Si no coincide con `main`, el deploy está desactualizado — exactamente el incidente detectado el 2026-07-05 (producción sirviendo código de junio).
+
+## Migraciones aplicadas / reconciliaciones
+
+- **`drizzle/0016_app_setting.sql` (RF-IRM-1, interruptor remoto del modo estático) — aplicada el 2026-10-02 desde la máquina de Jeff, con su autorización, antes del PR «Versión 2.1.0» a `main`.** Aditiva e idempotente, con `CREATE TABLE IF NOT EXISTS` y `ON CONFLICT DO NOTHING`. Crea `app_setting` con una sola fila posible (`id smallint` como PK, el CHECK `chk_app_setting_single_row (id = 1)`, `static_mode boolean NOT NULL` y `updated_at timestamptz NOT NULL DEFAULT now()`) e inserta la fila `(1, true)`, así que producción sigue en modo estático. Diseño y aprobación de BD en `specs/features/interruptor-remoto/interruptor-remoto.spec.md` (aprobada por el dueño el 2026-10-02).
+  Primero se aplicó en la rama `develop` de Neon, desde su SQL Editor, el 2026-10-02. Ahí el Preview de `develop` pasó la fila a `false` y de vuelta a `true`, y `GET /config` y `/portal-sync/status` cambiaron en segundos.
+  En producción se aplicó con el script de `db:apply` (`src/db/apply-migration.ts drizzle/0016_app_setting.sql`, en una transacción), dos veces para confirmar que es idempotente. El orden frente al código no condiciona el merge, porque si el código llega antes que la tabla el lector del modo usa la variable `MODO_ESTATICO`.
+  Backup previo: `backup_completo_pre_0016_20261002.sql` (`pg_dump` 18 de `libpq`, completo, fuera de git, con permisos 600).
+  Comprobación previa en solo lectura: el respaldo no contiene `app_setting`.
+  Verificación tras aplicar: `app_setting` tiene una sola fila `(1, true)` y `pg_constraint` muestra `app_setting_pkey` y `chk_app_setting_single_row`.
+  Para alternar el modo se edita la celda `static_mode` en la consola de Neon o se corre `UPDATE app_setting SET static_mode = false;` (ver `docs/devops.md`). La edición no cambia `updated_at`, que solo registra la creación de la fila.
+
+- **`drizzle/0015_portal_scores.sql` (RS-BE-55, RS-BE-57 y RS-BE-58, recarga de notas parciales y asistencia) — aplicada el 2026-09-26 desde la máquina de Jeff, con su autorización, antes del push y del merge de `feat/recarga-notas-asistencia`.** Aditiva e idempotente, con `IF NOT EXISTS` en cada sentencia y sin tocar ninguna fila. Crea `student_portal_score` (una fila por evaluación que publica la ULima, con su pareja del sílabo, siete CHECK, el UNIQUE `uq_student_portal_score_key`, el índice único parcial `uq_student_portal_score_assessment`, el índice `idx_student_portal_score_enrollment` y la FK a `enrollment` con `ON DELETE CASCADE`) y agrega a `enrollment` las columnas nulables `portal_grades_read_at` y `portal_attendance_read_at` (`timestamptz`). Diseño y aprobación de BD en `specs/features/recarga-portal/recarga-portal.spec.md` («Modelo de datos», aprobada por el dueño el 2026-09-26).
+  Se aplica con `bun run db:apply drizzle/0015_portal_scores.sql`, no con `db:migrate` ni `db:generate`, porque el journal (`drizzle/meta/_journal.json`) sigue en la `0009`. La aplica el dueño, con respaldo previo (`pg_dump` de `libpq`, por ruta completa) y su permiso explícito, ANTES de desplegar el código de la rama.
+  Aplicarla es la condición previa del merge, porque el proyecto de Vercel despliega `main` en producción y la importación ya escribe `enrollment.portal_attendance_read_at` en el mismo `UPDATE` de las horas (`sqlActualizarAsistencia`, en `src/modules/portal-sync/portal-sync.repository.ts`). Ese `UPDATE` corre dentro de la transacción de la importación, así que contra una base sin la columna deja `POST /portal-sync/import` fallando entera (RS-BE-58). El entorno *Preview* de Vercel comparte el `DATABASE_URL` de producción, de modo que el push de la rama también espera la aplicación y ningún despliegue de la rama, tampoco uno de vista previa, sale antes. El código no lleva ninguna guarda para este caso, porque sigue el orden que fija la spec (RS-BE-58 y «Orden de publicación»).
+  Verificación una vez aplicada. `to_regclass('student_portal_score')` deja de devolver `NULL`. `pg_constraint` muestra los siete CHECK, el UNIQUE, la PK y dos FK, la de `enrollment` con `confdeltype = 'c'` y la de `assessment` con `'a'`. `pg_indexes` muestra los cuatro índices de la tabla, e `information_schema.columns` muestra las dos columnas nuevas de `enrollment`, nulables y `timestamp with time zone`.
+  Se aplicó con el script de `db:apply` (`src/db/apply-migration.ts drizzle/0015_portal_scores.sql`, en una transacción).
+  Backup previo: `backup_completo_pre_0015_20260926.sql` (`pg_dump` completo, fuera de git, con permisos 600).
+  Comprobación previa en solo lectura: `to_regclass('student_portal_score')` devolvía `NULL` y `enrollment` no tenía ninguna de las dos columnas.
+  Verificación tras aplicar: la tabla existe con 0 filas; `pg_constraint` muestra los siete CHECK, el UNIQUE `uq_student_portal_score_key`, la PK y dos FK, la de `enrollment` con `confdeltype = 'c'` y la de `assessment` con `'a'`; `pg_indexes` muestra los cuatro índices; y `enrollment` tiene `portal_grades_read_at` y `portal_attendance_read_at`, nulables y `timestamp with time zone`, sin cambiar su número de filas.
+
+- **`drizzle/0014_specialty_test_result.sql` (RS-BE-44 — último resultado del test de especialidad) — aplicada el 2026-09-26 desde la máquina de Jeff, con su autorización, antes del merge de `feat/test-especialidad`.** Aditiva e idempotente (`CREATE TABLE IF NOT EXISTS`, sin tocar ninguna tabla existente): crea `student_specialty_test_result`, con una fila por alumno (`student_id` como clave primaria y `ON DELETE CASCADE` hacia `student`), la versión del contenido, el ranking en `jsonb` y si hubo empate, y la fecha. No guarda las respuestas, los desempates ni el motivo. Diseño en `specs/features/specialty-test/specialty-test.spec.md`, con su aprobación de BD del 2026-09-25.
+  Se aplicó con el script de `db:apply` (`src/db/apply-migration.ts drizzle/0014_specialty_test_result.sql`, en una transacción), no con `db:migrate`, porque el journal sigue en la `0009`.
+  Backup previo: `backup_completo_pre_0014_20260926.sql` (`pg_dump` completo, fuera de git, con permisos 600).
+  Comprobación previa en solo lectura: las especialidades activas son las cuatro oficiales (ids 1, 5, 6 y 7), con los mismos nombres del contenido 2026-09-25.4.
+  Verificación tras aplicar: `to_regclass` devuelve la tabla, con 5 columnas, los dos CHECK (`chk_specialty_test_version` y `chk_specialty_test_ranking`), la clave primaria y la FK con `ON DELETE CASCADE`, y 0 filas.
+
+- **`drizzle/0013_chatbot_message_history.sql` (BR-CB-20, índice del historial del chatbot) — aplicada el 2026-09-25 desde la máquina de Jeff, con su autorización, antes del merge de `fix/chatbot-delegados-bloques`.** Aditiva e idempotente, crea un solo índice, `idx_chatbot_message_session_created` sobre `chatbot_message (session_id, created_at)`, con `CREATE INDEX IF NOT EXISTS`, y no toca ninguna tabla, columna ni fila. `getRecentMessages` lo usa para leer los 10 últimos mensajes de la sesión sin ordenarla entera. `idx_chatbot_message_session` queda redundante y no se borra en esta migración. Diseño en `specs/features/chatbot/chatbot.spec.md` («Base de Datos» y BR-CB-20), con su aprobación de BD aparte de la de la spec.
+  Aplicar con `bun run db:apply drizzle/0013_chatbot_message_history.sql`, no con `db:migrate` ni `db:generate`, porque el journal (`drizzle/meta/_journal.json`) sigue en la `0009`. Con backup previo, siguiendo el protocolo de este documento.
+  Verificación una vez aplicada. `to_regclass('idx_chatbot_message_session_created')` deja de devolver `NULL`, y `pg_indexes` muestra el índice sobre `chatbot_message` con las columnas `session_id, created_at`.
+  Hasta que el dueño apruebe el conteo y el respaldo de abajo, nadie corre el código de esta rama con el `DATABASE_URL` de producción, porque la primera petición al chatbot de esa ejecución corre `purgeSessionsBeforeActivePeriod` (BR-CB-22) contra la base real, antes del conteo, del respaldo y de la aprobación, y la app llama a `GET /chatbot/sessions` apenas se abre el chatbot. Es el paso 1 de «Primera purga en producción», y cubre tres casos.
+  - Un despliegue de vista previa (entorno *Preview*). Antes de subir la rama al remoto o de abrir el PR, el dueño comprueba en Vercel que ningún entorno *Preview* use el `DATABASE_URL` de producción, o desactiva esos despliegues para esta rama. `vercel.json` no los desactiva, y con la integración de Git de Vercel activa cada push de la rama arma uno por defecto. Resultado del 2026-09-25: el entorno *Preview* comparte el `DATABASE_URL` de producción. El dueño aprobó ese día subir la rama igual, porque el respaldo y el conteo ya estaban tomados y el borrado único de BR-CB-22b elimina de todos modos todo el historial previo. Separar la base de *Preview* queda como tarea aparte.
+  - Una ejecución local con `bun run dev`. La puesta en marcha local del README pide un `.env` cuya única variable auténtica es el `DATABASE_URL` de Neon, así que la prueba manual del arreglo de delegados va contra una rama de Neon o un PostgreSQL local.
+  - Un script o una prueba que construya `ChatbotRepository` con esa base.
+
+  Si alguien necesita correr la rama contra Neon antes del merge, el `pg_dump` de `chatbot_session` y `chatbot_message` y el conteo en solo lectura se toman antes, y el dueño aprueba la purga.
+  El mismo despliegue borra historial vivo en dos pasos que no están en el `.sql` y que el dueño aprueba por separado. El primero es el borrado único de BR-CB-22b, que elimina todas las sesiones y mensajes del chatbot anteriores al ajuste, en una transacción y en la misma ventana del merge. El segundo es la primera purga por ciclo de BR-CB-22 («Primera purga en producción»), que corre sola en la primera petición al chatbot después del despliegue. Los dos llevan antes un conteo en una transacción de solo lectura (la consulta está en BR-CB-22) y un `pg_dump` de `chatbot_session` y `chatbot_message` fuera de git.
+  Al aplicar y desplegar se completa aquí la comprobación de los despliegues de vista previa, la constancia de que nadie corrió la rama contra producción antes de la aprobación, la fecha de la `0013`, el nombre de su backup y su verificación, el conteo y el respaldo de la primera purga y del borrado de BR-CB-22b, y la fecha del despliegue, sin copiar el contenido de ninguna conversación.
+  Registro del 2026-09-25, sin copiar el contenido de ninguna conversación.
+  - Nadie corrió la rama contra producción antes de la aprobación. Sus pruebas usan un `DATABASE_URL` local ficticio.
+  - Conteo en una transacción de solo lectura, antes de todo: 29 sesiones y 217 mensajes de 8 alumnos, del 2026-07-12 al 2026-09-24.
+  - Respaldos fuera de git, con permisos 600: `backup_chatbot_pre_0013_20260925.sql` (`pg_dump` de `chatbot_session` y `chatbot_message`, con las 29 y las 217 filas), `backup_completo_pre_0013_20260925.sql` (`pg_dump` completo) y `backup_chatbot_pre_0013_20260925.json` (las dos tablas en JSON, tomado por el endpoint HTTPS de Neon mientras la red bloqueaba el 5432).
+  - La `0013` se aplicó con `db:apply` en una transacción. Verificación, `pg_indexes` muestra `idx_chatbot_message_session_created` con `(session_id, created_at)` junto a `chatbot_message_pkey` e `idx_chatbot_message_session`.
+  - Despliegue verificado el 2026-09-25 con `GET /version`, que devolvió `1801a02` (merge del PR #8).
+  - Borrado único de BR-CB-22b, el 2026-09-25 a las 20:51 UTC, en una transacción y justo después de esa verificación. Borró 29 sesiones y 217 mensajes, las mismas cifras del conteo y del respaldo, así que no entró ninguna conversación nueva entre el respaldo y el borrado. Después quedaron 0 sesiones y 0 mensajes. Desde ahí rige la retención por ciclo de BR-CB-22.
+  - Los respaldos siguen fuera de git hasta que el dueño indique descartarlos.
+
+- **`drizzle/0012_time_blocks.sql` (RS-BE-30 — bloques de horario propios del alumno) — aplicada el 2026-09-23 desde la máquina de Jeff, con su autorización.** Aditiva e idempotente (tipo enumerado guardado contra `duplicate_object`, `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, sin tocar ninguna columna existente): crea el enum `time_block_exception_status` (`cancelled`, `moved`), `student_time_block` (la regla: título, color, días de la semana, horas y rango de fechas) y `student_time_block_exception` (una fila por fecha cancelada o movida), con `ON DELETE CASCADE` hacia `student` y hacia el bloque. Diseño en `specs/features/time-blocks/time-blocks.spec.md` (RS-BE-30 a RS-BE-35).
+  Se aplicó con el script de `db:apply` (`src/db/apply-migration.ts drizzle/0012_time_blocks.sql`, en una transacción), no con `db:migrate`: el journal (`drizzle/meta/_journal.json`) sigue en la `0009`, igual que con la `0010` y la `0011`.
+  Backup previo: `backup_pre_0012_20260923.sql` (`pg_dump` completo, fuera de git).
+  Verificación tras aplicar: `to_regclass` devuelve las dos tablas y el índice `idx_time_block_student`; 17 columnas entre las dos (11 + 6); los ocho CHECK (`chk_time_block_horas`, `_grilla`, `_fechas`, `_dias`, `_color`, `_titulo`, `_exc_movido`, `_exc_grilla`), el UNIQUE `uq_time_block_exception` y las dos FK con `ON DELETE CASCADE`.
+
+- **`drizzle/0011_academic_record.sql` (RS-BE-22/24/25 — copia del récord académico) — aplicada el 2026-09-20 por Jeff.** Aditiva e idempotente (`CREATE TABLE IF NOT EXISTS`, sin tocar ninguna columna existente): crea `student_record_entry` (una fila por curso del récord: ciclo, código, vez, nota), `student_academic_snapshot` (una fila por alumno: PPA, ubicación relativa, créditos) y `student_period_summary` (una fila por ciclo del bloque "por período" de `layout.jsp`), las tres colgando de `student` con `ON DELETE CASCADE`. Diseño en `specs/features/academic-record/academic-record.spec.md` (RS-BE-19 a RS-BE-29).
+  Se aplicó con `bun run db:apply drizzle/0011_academic_record.sql`, no con `db:migrate`: el journal (`drizzle/meta/_journal.json`) se quedó en la `0009`, igual que con la `0010` de abajo.
+  Backup previo: `backup_pre_0011_20260920.sql` (`pg_dump` completo, 36 tablas con datos, 496 KB, fuera de git).
+  Verificación tras aplicar: `to_regclass` devuelve las tres tablas; 35 columnas entre las tres; `student_record_entry` con sus tres CHECK (`attempt`, `credits`, `grade`), su `uq_student_record_entry` y su FK a `student` con `ON DELETE CASCADE`.
+  Verificación una vez aplicada: `to_regclass('student_record_entry')`, `to_regclass('student_academic_snapshot')` y `to_regclass('student_period_summary')` deben dejar de devolver `NULL`.
+
+- **`drizzle/0010_course_weekly_hours.sql` (RS-BE-9 — horas de clase semanales del plan de estudios) — ✅ APLICADA 2026-09-06** con `bun run db:apply` (el archivo se aplicó primero como `0009_course_weekly_hours.sql`; para cuando esa rama se integró, `main` ya había publicado su propio `0009_avatar.sql`, así que el commit `b6218a8` solo renombró el archivo a `0010` — cita textual: "no hay conflicto de journal ni de base... las dos ya están en la BD"). Aditiva y NULLABLE: agrega `course.weekly_hours smallint` (columna TOT del plan de estudios oficial; cubre las ofertas que todavía no tienen horario importado) y el CHECK `chk_course_weekly_hours (weekly_hours IS NULL OR weekly_hours > 0)`. Diseño en `specs/features/portal-sync/portal-sync.spec.md` §Horas de clase del ciclo.
+  El mismo día se corrió `src/db/seed/malla_horas.ts --apply` (71 de 71 cursos del plan de Ingeniería de Sistemas cruzan por `course.code`) y `src/db/seed/backfill_total_hours.ts --apply` (corrigió las 74 ofertas del período activo; ninguna bajó de total). Contraste contra el propio portal: su «Total horas programadas» coincide 5/5 con el resultado.
+  Verificación: es un `ADD COLUMN`, no una tabla nueva, así que no aplica `to_regclass`; la constancia disponible es el cruce del seed y el backfill de arriba. **No hay registro en ningún documento del repo del nombre del backup previo** — no se inventa uno acá; si alguien lo tiene, falta agregarlo.
+
+- **`drizzle/0008_course_equivalence.sql` (equivalencias de malla) — ✅ APLICADA 2026-09-06** con `bun run db:migrate` (era la única pendiente: los hashes de las otras 7 entradas del journal ya estaban en `drizzle.__drizzle_migrations`). Aditiva y no destructiva: crea la tabla `course_equivalence` (código de la malla anterior → `curriculum_course` de la vigente), su unique `uq_course_equivalence (curriculum_id, legacy_code)` y **una FK compuesta** `(curriculum_course_id, curriculum_id)` → `uq_curriculum_course_id_curriculum`, que impide apuntar a un curso de otra malla. No toca ninguna tabla existente. Diseño en `specs/features/portal-sync/portal-sync.spec.md` §Equivalencias de malla.
+  Backup previo: `backup_pre_0008_20260906.sql` (461K) ✔. Seed aplicado el mismo día con `bun run db:seed:equivalencias -- --apply`: **14 filas**, 0 sin curso vigente.
+  Verificación: `to_regclass('course_equivalence')` ✔; sobre el récord real de 20239901, de 53 cursos aprobados pasan a emparejar **41** (27 por código + 14 por equivalencia) y quedan **12** sin emparejar, exactamente los de Estudios Generales que esperan la tabla oficial 2026-1 ↔ 2025-1 ✔.
+  ⚠️ El efecto NO es retroactivo: cada alumno reescribe su progreso en su próxima importación desde el portal.
+
+- **`drizzle/0001_flowery_jack_flag.sql` (HU27 — carnet de networking) — ✅ APLICADA a prod (2026-07-11)** con `bun run db:migrate`. Aditiva y no-destructiva: enum `social_platform` + tabla `user_social_link` + columna `app_user.networking_opt_in boolean default false NOT NULL`. Diseño en `specs/features/networking/networking.spec.md`. BD lista para que meltiruiz implemente HU27.
+- **Reconciliación de drift (2026-07-11)**: la BD viva tenía una columna `teacher.linkedin_link varchar(500)` agregada **directamente en la BD** (fuera de Drizzle y del schema.ts — un compañero empezó networking por su lado). Estaba 100% en NULL. Se **dropeó** (`ALTER TABLE teacher DROP COLUMN linkedin_link`) para eliminar el drift y consolidar el networking en el diseño de HU27 (`user_social_link` sobre `app_user`, que cubre alumnos **y** docentes). Backup previo de `teacher` (175 filas) tomado antes del drop.
+- **`drizzle/0002_slim_miracleman.sql` (HU19 — estado de simulación `simulated_available`) — ✅ APLICADA a prod (2026-07-11)**. Agrega el valor `simulated_available` al enum `curriculum_simulation_status` (habilita simular "des-aprobar" un curso: aprobado→disponible; antes el `PUT /curriculum/me/simulation` daba 400). ⚠️ **GOTCHA: `ALTER TYPE ... ADD VALUE` NO corre dentro de una transacción** → `bun run db:migrate` (y `db:apply`, que envuelven en transacción) **fallan** con ese error, PERO el valor **igual se agrega** (ADD VALUE es no-transaccional y no se revierte). Reconciliación hecha: se verificó que el enum ya tenía el valor y se **selló manualmente la 0002** en `drizzle.__drizzle_migrations` (insert de `hash=sha256(0002.sql)` + `created_at=journal.when`) → `db:migrate` volvió a quedar no-op. **Para futuros `ADD VALUE`**: correr el `ALTER TYPE` en autocommit (sin `sql.begin`) y luego sellar la migración, en vez de `db:migrate`.
+
+## Variante de laboratorio (rama `laboratorio/sin-portal`)
+
+- **`drizzle/0017_laboratorio_sin_portal.sql` (retiro del esquema del portal y del modo estático) — SOLO para la base del laboratorio, nunca para la de producción. ✅ APLICADA a la base local del laboratorio (2026-10-04).** Destructiva e idempotente, con `IF EXISTS` en cada sentencia y sin `CASCADE`. Borra las tablas `student_portal_score`, `section_representative_claim`, `student_record_entry`, `student_academic_snapshot`, `student_period_summary`, `course_equivalence` y `app_setting`, las columnas `enrollment.final_grade`, `enrollment.portal_grades_read_at`, `enrollment.portal_attendance_read_at` y `course.weekly_hours`, y los CHECK `chk_enrollment_final_grade` y `chk_course_weekly_hours`. Conserva la asistencia (`enrollment.attended_hours`, `absent_hours` y `total_hours`, y `course_offering.total_hours`, con sus CHECK). Qué se retiró y por qué está en `LABORATORIO.md`.
+  Se aplica con `bun run db:apply drizzle/0017_laboratorio_sin_portal.sql`, en una transacción, y no con `db:migrate` ni `db:generate`, porque el journal (`drizzle/meta/_journal.json`) sigue en la `0009`.
+  Aplicación del 2026-10-04 en la base `ulimapp_lab` del Postgres 16 local del laboratorio (`127.0.0.1:5433`), con `scripts/laboratorio/levantar-bd.sh`, que arma el esquema desde cero con `db:migrate` (journal de la `0000` a la `0009`) y después aplica con `db:apply`, en orden, la `0001_course_offering_total_hours` y de la `0010` a la `0017`. Verificación del mismo script: `to_regclass` devuelve `NULL` para las siete tablas, `information_schema.columns` no trae ninguna de las cuatro columnas ni otra `portal_*`, y la base tiene las 36 tablas de `schema.ts`. Ninguna base de Neon se tocó.

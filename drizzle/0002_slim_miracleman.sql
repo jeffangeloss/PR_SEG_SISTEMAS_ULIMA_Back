@@ -1,0 +1,1 @@
+ALTER TYPE "public"."curriculum_simulation_status" ADD VALUE 'simulated_available';

@@ -1,0 +1,2 @@
+ALTER TABLE "course_offering" ADD COLUMN "total_hours" numeric(5, 2) DEFAULT '0' NOT NULL;--> statement-breakpoint
+ALTER TABLE "course_offering" ADD CONSTRAINT "chk_course_offering_total_hours" CHECK ("course_offering"."total_hours" >= 0);

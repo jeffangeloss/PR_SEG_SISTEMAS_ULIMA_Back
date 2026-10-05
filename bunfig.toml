@@ -1,0 +1,3 @@
+[test]
+# Bootstrap de entorno (secretos dummy) antes de cargar los tests.
+preload = ["./test/env.setup.ts"]

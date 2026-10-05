@@ -1,0 +1,283 @@
+import { construirUrlAvatar } from "../avatar/avatar.logic.js";
+import { config } from "../../config/app-config.js";
+import { partirNombre as splitName } from "../../shared/utils/nombre-persona.js";
+import { Hono, type Context } from "hono";
+import type { CourseDetailController } from "./course-detail.controller.js";
+import { sql } from "drizzle-orm";
+import { db } from "../../db/index.js";
+import {
+  authMiddleware, requireRole, STUDENT_ROLES, type AuthVariables,
+} from "../../shared/middleware/auth-middleware.js";
+import { HttpError } from "../../shared/errors/http-error.js";
+
+
+export const createCourseDetailRoutes = (controller: CourseDetailController) => {
+  const app = new Hono<{ Variables: AuthVariables }>();
+
+  // Todas las rutas de detalle de curso exponen datos académicos sensibles
+  // (secciones, docentes, matrículas, contactos): requieren JWT válido de alumno.
+  app.use("*", authMiddleware);
+  app.use("*", requireRole(...STUDENT_ROLES, "teacher"));
+
+  // Nota: estas rutas usan SQL crudo (deuda reconocida en la auditoría). No
+  // atrapan errores de BD: un fallo se propaga al errorHandler global (500 real)
+  // en vez de devolver listas vacías con 200. Ver docs/AUDITORIA_TECNICA.md §6.1.
+  /**
+   * Pertenencia a la sección. Pasan el alumno matriculado y el docente o jefe
+   * de práctica de esa misma sección.
+   *
+   * Estas rutas exponen la nómina, el correo institucional y el cargo de cada
+   * persona. Sin la guarda, cualquier usuario autenticado puede iterar
+   * `sectionId` y armarse el padrón de delegados de toda la universidad.
+   *
+   * El `?? 0` es un centinela que nunca empata: los id son identity y arrancan
+   * en 1, y un alumno no trae teacherId ni un docente studentId.
+   */
+  const exigirPertenencia = async (c: Context, sectionId: number) => {
+    const studentId = c.get("studentId") as number | undefined;
+    const teacherId = c.get("teacherId") as number | undefined;
+    const allowed = (await db.execute(sql`
+      select 1 as ok from section sec
+      where sec.id = ${sectionId}
+        and (
+          sec.teacher_id = ${teacherId ?? 0}
+          or sec.jp_id = ${teacherId ?? 0}
+          or exists (
+            select 1 from enrollment e
+            where e.section_id = sec.id and e.student_id = ${studentId ?? 0}
+          )
+        )
+      limit 1
+    `)) as unknown as Array<{ ok: number }>;
+    if (!allowed.length) {
+      throw new HttpError(403, "No perteneces a esta sección.", "SECTION_FORBIDDEN");
+    }
+  };
+
+  app.get("/sections", async (c) => {
+    // RS-BE-12: las horas son del alumno autenticado, no del salón. El `?? 0` es
+    // el mismo centinela que usa `exigirPertenencia`: los id arrancan en 1, así
+    // que un docente (sin studentId) no empata con ninguna matrícula y recibe
+    // horas en 0 con `asistenciaDisponible: false`, que es lo honesto.
+    const studentId = (c.get("studentId") as number | undefined) ?? 0;
+    const rows = await db.execute(sql`
+      select
+        sec.id as section_id,
+        sec.code as section_code,
+        t.teacher_code,
+        c.id as course_id,
+        c.name as course_name,
+        coalesce(avg(sscore.value), 0) as promedio,
+        coalesce(max(mia.attended_hours), 0) as attended_hours,
+        coalesce(max(mia.absent_hours), 0) as absent_hours,
+        coalesce(max(mia.total_hours), 0) as total_hours
+      from section sec
+      join teacher t on t.id = sec.teacher_id
+      join course_offering co on co.id = sec.course_offering_id
+      join course c on c.id = co.course_id
+      left join enrollment e on e.section_id = sec.id
+      left join student_score sscore on sscore.enrollment_id = e.id
+      left join enrollment mia on mia.section_id = sec.id and mia.student_id = ${studentId}
+      group by sec.id, sec.code, t.teacher_code, c.id, c.name
+      order by c.name, sec.code
+    `) as unknown as Array<any>;
+
+    return c.json({
+      secciones: rows.map((row) => ({
+        idSeccion: String(row.section_id),
+        codigoSeccion: row.section_code,
+        docenteCode: row.teacher_code ?? "",
+        promedioSeccion: Number(row.promedio ?? 0),
+        idCurso: String(row.course_id),
+        curso: row.course_name,
+        asistido: Number(row.attended_hours ?? 0),
+        inasistencia: Number(row.absent_hours ?? 0),
+        total: Number(row.total_hours ?? 0),
+        asistenciaDisponible: Number(row.total_hours ?? 0) > 0,
+        horasTranscurridas: Number(row.attended_hours ?? 0) + Number(row.absent_hours ?? 0),
+      })),
+    });
+  });
+
+  app.get("/teachers", async (c) => {
+    const rows = await db.execute(sql`
+      select teacher_code, full_name
+      from teacher
+      order by full_name
+    `) as unknown as Array<{ teacher_code: string | null; full_name: string }>;
+
+    return c.json({
+      docentes: rows.map((row) => ({
+        code: row.teacher_code ?? "",
+        ...splitName(row.full_name),
+      })),
+    });
+  });
+
+  app.get("/enrollments", async (c) => {
+    const rows = await db.execute(sql`
+      select
+        e.id,
+        au.code as student_code,
+        co.course_id,
+        e.section_id
+      from enrollment e
+      join student st on st.id = e.student_id
+      join app_user au on au.id = st.user_id
+      join section sec on sec.id = e.section_id
+      join course_offering co on co.id = sec.course_offering_id
+      order by e.section_id, au.code
+    `) as unknown as Array<any>;
+
+    return c.json({
+      enrollments: rows.map((row) => ({
+        id: String(row.id),
+        studentCode: row.student_code,
+        idCurso: String(row.course_id),
+        idSeccion: String(row.section_id),
+      })),
+    });
+  });
+
+  app.get("/sections/:sectionId", async (c) => {
+    const sectionId = c.req.param("sectionId");
+    // Reenvía el Authorization para que la sub-petición interna pase authMiddleware.
+    const response = await app.request("/sections", {
+      headers: { Authorization: c.req.header("Authorization") ?? "" },
+    });
+    const data = await response.json() as { secciones: any[] };
+    return c.json({ section: data.secciones.find((section) => section.idSeccion === sectionId) ?? null });
+  });
+
+  app.get("/sections/:sectionId/announcements", async (c) => {
+    await exigirPertenencia(c, Number(c.req.param("sectionId")));
+    return controller.getAnnouncements(c);
+  });
+
+  app.get("/sections/:sectionId/contacts", async (c) => {
+    const sectionId = Number(c.req.param("sectionId"));
+
+    await exigirPertenencia(c, sectionId);
+
+    const teacherRows = await db.execute(sql`
+      select
+        t.teacher_code,
+        t.full_name,
+        au.networking_opt_in,
+        au.avatar_public_id,
+        au.avatar_version,
+        usl.platform,
+        usl.url,
+        usl.label
+      from section sec
+      join teacher t on t.id = sec.teacher_id
+      left join app_user au on au.id = t.user_id
+      left join user_social_link usl on usl.user_id = au.id
+      where sec.id = ${sectionId}
+    `) as unknown as Array<any>;
+    // HU18: jefe de práctica de la sección (0 o 1).
+    const jpRows = await db.execute(sql`
+      select
+        t.teacher_code,
+        t.full_name,
+        au.networking_opt_in,
+        au.avatar_public_id,
+        au.avatar_version,
+        usl.platform,
+        usl.url,
+        usl.label
+      from section sec
+      join teacher t on t.id = sec.jp_id
+      left join app_user au on au.id = t.user_id
+      left join user_social_link usl on usl.user_id = au.id
+      where sec.id = ${sectionId}
+    `) as unknown as Array<any>;
+    const rows = await db.execute(sql`
+      select
+        e.id as enrollment_id,
+        au.code,
+        au.full_name,
+        au.institutional_email,
+        au.networking_opt_in,
+        au.avatar_public_id,
+        au.avatar_version,
+        s.career_id,
+        sr.position,
+        usl.platform,
+        usl.url,
+        usl.label
+      from enrollment e
+      join student s on s.id = e.student_id
+      join app_user au on au.id = s.user_id
+      left join user_social_link usl on usl.user_id = au.id
+      left join section_representative sr on sr.enrollment_id = e.id and sr.is_active = true
+      where e.section_id = ${sectionId}
+      order by au.full_name
+    `) as unknown as Array<any>;
+
+    // La URL se construye al vuelo y nunca se guarda: con la URL persistida no
+    // se podría cambiar la transformación después ni borrar la imagen.
+    const urlAvatarDe = (row: any) =>
+      construirUrlAvatar({
+        cloudName: config.cloudinary.cloudName,
+        publicId: row?.avatar_public_id ?? null,
+        version: row?.avatar_version ?? null,
+      });
+
+    const networkingFromRows = (items: Array<any>) => ({
+      optIn: Boolean(items[0]?.networking_opt_in),
+      links: items
+        .filter((item) => item.platform != null && item.url != null)
+        .slice(0, 1)
+        .map((item) => ({
+          platform: item.platform,
+          url: item.url,
+          label: item.label ?? null,
+        })),
+    });
+
+    const mapTeacherContact = (items: Array<any>) =>
+      items[0]
+        ? {
+            code: items[0].teacher_code ?? "",
+            ...splitName(items[0].full_name),
+            // Un docente sin cuenta no tiene dónde guardar una foto: `avatarUrl`
+            // sale null y la app pinta sus iniciales, como siempre.
+            avatarUrl: urlAvatarDe(items[0]),
+            networking: networkingFromRows(items),
+          }
+        : null;
+
+    const studentsByEnrollment = new Map<number, Array<any>>();
+    for (const row of rows) {
+      const current = studentsByEnrollment.get(row.enrollment_id) ?? [];
+      current.push(row);
+      studentsByEnrollment.set(row.enrollment_id, current);
+    }
+
+    return c.json({
+      docente: mapTeacherContact(teacherRows),
+      // HU18: grupo "Jefe de Práctica" (entre Docente y Alumnos). null si la sección no tiene JP.
+      jefePractica: mapTeacherContact(jpRows),
+      alumnos: Array.from(studentsByEnrollment.values()).map((studentRows) => {
+        const row = studentRows[0];
+        return {
+          user: {
+            code: row.code,
+            ...splitName(row.full_name),
+            email: row.institutional_email,
+            role: row.position === "delegate" ? "delegado" : row.position === "subdelegate" ? "subdelegado" : "estudiante",
+            career_id: row.career_id,
+            currentCycle: "2026-1",
+            setupComplete: true,
+          },
+          roleInSection: row.position === "delegate" ? "delegado" : row.position === "subdelegate" ? "subdelegado" : "estudiante",
+          avatarUrl: urlAvatarDe(row),
+          networking: networkingFromRows(studentRows),
+        };
+      }),
+    });
+  });
+
+  return app;
+};

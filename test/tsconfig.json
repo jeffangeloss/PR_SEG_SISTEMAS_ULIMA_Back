@@ -1,0 +1,21 @@
+{
+  // Config de TypeScript SOLO para el editor (VS Code) sobre los tests.
+  // El build (`tsc`) usa ../tsconfig.json, que únicamente incluye src/ y emite a
+  // dist/. Sin este archivo, TypeScript mete cada *.test.ts en un "proyecto
+  // inferido" sin bun-types y por eso no resuelve el módulo virtual "bun:test"
+  // (error ts2307). No afecta a `bun test` ni a `tsc` (que no lee este config).
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    // En tests son comunes los parámetros sin usar (firmas de mocks/fakes);
+    // se relajan para no ensuciar el editor con avisos nuevos.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "types": ["bun-types"]
+  },
+  "include": ["**/*.ts"]
+}

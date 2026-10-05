@@ -1,0 +1,2477 @@
+{
+ "_origen": "Catálogo institucional exportado una vez de la base de ULima++ (solo lectura, 2026-10-04) para la variante de laboratorio. Solo carrera, malla, cursos, requisitos, especialidades y tipos de evaluación; no contiene personas. course.weekly_hours se omite porque la variante retira esa columna.",
+ "career": [
+  {
+   "id": 1,
+   "code": "SIS",
+   "name": "Ingeniería de Sistemas",
+   "faculty": "Facultad de Ingeniería",
+   "is_active": true
+  }
+ ],
+ "curriculum": [
+  {
+   "id": 1,
+   "career_id": 1,
+   "name": "Malla Curricular Ingeniería de Sistemas",
+   "is_active": true
+  }
+ ],
+ "course": [
+  {
+   "id": 21,
+   "code": "650012",
+   "name": "INTERNET DE LAS COSAS / INTERNET OF THINGS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 22,
+   "code": "650070",
+   "name": "PARADIGMAS DE PROGRAMACIÓN",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 23,
+   "code": "650071",
+   "name": "GESTIÓN DE BASE DE DATOS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 25,
+   "code": "650019",
+   "name": "GESTIÓN DE OPERACIONES",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 26,
+   "code": "650063",
+   "name": "INGENIERÍA DE SOFTWARE I",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 27,
+   "code": "650072",
+   "name": "ANÁLISIS Y DISEÑO DE ALGORITMOS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 28,
+   "code": "650073",
+   "name": "REDES AVANZADAS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 29,
+   "code": "650074",
+   "name": "INGENIERÍA DEL CONOCIMIENTO",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 30,
+   "code": "1327",
+   "name": "INGENIERÍA DE SOFTWARE II",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 31,
+   "code": "650028",
+   "name": "SISTEMAS ERP",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 32,
+   "code": "650030",
+   "name": "PROGRAMACIÓN MÓVIL",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 33,
+   "code": "650042",
+   "name": "AUDITORÍA Y CONTROL DE SISTEMAS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 34,
+   "code": "650066",
+   "name": "PROPUESTA DE INVESTIGACIÓN",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 35,
+   "code": "650075",
+   "name": "DEEP LEARNING",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 36,
+   "code": "650076",
+   "name": "TÓPICOS AVANZADOS EN CIBERSEGURIDAD",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 37,
+   "code": "650077",
+   "name": "SISTEMAS DISTRIBUIDOS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 38,
+   "code": "650078",
+   "name": "ANALÍTICA DE NEGOCIOS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 39,
+   "code": "650025",
+   "name": "COMPUTACIÓN EN LA NUBE",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 40,
+   "code": "650079",
+   "name": "PROYECTO DE DESARROLLO DE SOFTWARE",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 41,
+   "code": "650080",
+   "name": "INNOVACIÓN DIGITAL",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 42,
+   "code": "650081",
+   "name": "PROYECTO DE VIDEOJUEGOS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 43,
+   "code": "520074",
+   "name": "SEGURIDAD, SALUD OCUPACIONAL Y BIENESTAR ORGANIZACIONAL",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 44,
+   "code": "650011",
+   "name": "INTERACCIÓN HUMANO COMPUTADORA / HUMAN COMPUTER INTERACTION",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 45,
+   "code": "650044",
+   "name": "ANALÍTICA CON BIG DATA",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 46,
+   "code": "650082",
+   "name": "ARQUITECTURA EMPRESARIAL",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 47,
+   "code": "650083",
+   "name": "ARQUITECTURA DE TECNOLOGÍAS DE LA INFORMACIÓN",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 48,
+   "code": "650084",
+   "name": "DEVOPS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 49,
+   "code": "650085",
+   "name": "ARQUITECTURA DE SOFTWARE",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 50,
+   "code": "510003",
+   "name": "LENGUAJE Y COMUNICACIÓN I",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 51,
+   "code": "510005",
+   "name": "INTRODUCCIÓN A LA INGENIERÍA",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 52,
+   "code": "510006",
+   "name": "PROCESOS PSICOLÓGICOS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 53,
+   "code": "6508",
+   "name": "METODOLOGÍAS DE INVESTIGACIÓN",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 54,
+   "code": "510007",
+   "name": "ÉTICA CIUDADANA",
+   "default_credit": 2,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 55,
+   "code": "510014",
+   "name": "PRECÁLCULO",
+   "default_credit": 5,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 56,
+   "code": "6511",
+   "name": "LENGUAJE Y COMUNICACIÓN II",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 57,
+   "code": "510011",
+   "name": "INTRODUCCIÓN AL COMERCIO INTERNACIONAL",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 58,
+   "code": "6384",
+   "name": "ÁLGEBRA LINEAL",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 59,
+   "code": "510015",
+   "name": "FUNDAMENTOS DE ECONOMÍA",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 60,
+   "code": "510010",
+   "name": "FILOSOFÍA APLICADA",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 61,
+   "code": "6503",
+   "name": "CÁLCULO I",
+   "default_credit": 5,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 62,
+   "code": "560042",
+   "name": "CÁLCULO II",
+   "default_credit": 5,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 63,
+   "code": "560038",
+   "name": "SISTEMAS ORGANIZACIONALES / ORGANIZATIONAL SYSTEMS",
+   "default_credit": 2,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 64,
+   "code": "650053",
+   "name": "FÍSICA PARA SISTEMAS",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 65,
+   "code": "650054",
+   "name": "INTRODUCCIÓN A LA PROGRAMACIÓN",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 66,
+   "code": "560040",
+   "name": "INTELIGENCIA ARTIFICIAL APLICADA",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 67,
+   "code": "650055",
+   "name": "ESTRUCTURAS DISCRETAS DE COMPUTACIÓN",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 68,
+   "code": "560047",
+   "name": "CÁLCULO III",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 69,
+   "code": "560046",
+   "name": "ESTADÍSTICA Y PROBABILIDAD",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 70,
+   "code": "650008",
+   "name": "MODELACIÓN E INTEGRACIÓN DE SISTEMAS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 71,
+   "code": "650056",
+   "name": "ARQUITECTURA DE COMPUTADORAS",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 72,
+   "code": "560043",
+   "name": "COSTEO DE OPERACIONES",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 73,
+   "code": "650086",
+   "name": "PROGRAMACIÓN ORIENTADA A OBJETOS",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 74,
+   "code": "560048",
+   "name": "INVESTIGACIÓN DE OPERACIONES I",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 75,
+   "code": "650057",
+   "name": "SISTEMAS OPERATIVOS",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 76,
+   "code": "650058",
+   "name": "ESTADÍSTICA APLICADA",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 77,
+   "code": "650009",
+   "name": "DESARROLLO DE COMPETENCIAS GERENCIALES",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 78,
+   "code": "650059",
+   "name": "ESTRUCTURAS DE DATOS I",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 79,
+   "code": "650060",
+   "name": "MODELAMIENTO DE BASE DE DATOS",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 80,
+   "code": "650010",
+   "name": "INGENIERÍA DE PROCESOS DE NEGOCIO",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 81,
+   "code": "650015",
+   "name": "REDES DE COMPUTADORAS",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 82,
+   "code": "650018",
+   "name": "SIMULACIÓN",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 83,
+   "code": "650061",
+   "name": "ESTRUCTURAS DE DATOS II",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 84,
+   "code": "650022",
+   "name": "PROGRAMACIÓN WEB",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 85,
+   "code": "650016",
+   "name": "GESTIÓN FINANCIERA",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 86,
+   "code": "650062",
+   "name": "SISTEMAS DE INTELIGENCIA EMPRESARIAL",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 87,
+   "code": "650064",
+   "name": "APRENDIZAJE DE MÁQUINA / MACHINE LEARNING",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 88,
+   "code": "650065",
+   "name": "CIBERSEGURIDAD / CYBERSECURITY",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 89,
+   "code": "650033",
+   "name": "PLANEAMIENTO ESTRATÉGICO",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 90,
+   "code": "5674",
+   "name": "GESTIÓN DE PROYECTOS",
+   "default_credit": 3,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 91,
+   "code": "650035",
+   "name": "SEMINARIO DE INVESTIGACIÓN I",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 92,
+   "code": "650067",
+   "name": "SEGURIDAD DE SISTEMAS",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 93,
+   "code": "650040",
+   "name": "SEMINARIO DE INVESTIGACIÓN II",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 94,
+   "code": "650068",
+   "name": "GESTIÓN DE SERVICIOS DIGITALES",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  },
+  {
+   "id": 95,
+   "code": "650069",
+   "name": "PROYECTO INTEGRADOR DE SISTEMAS",
+   "default_credit": 4,
+   "origin_faculty": null,
+   "is_active": true
+  }
+ ],
+ "curriculum_course": [
+  {
+   "id": 21,
+   "curriculum_id": 1,
+   "course_id": 21,
+   "cycle": 6,
+   "display_order": 8,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 22,
+   "curriculum_id": 1,
+   "course_id": 22,
+   "cycle": 6,
+   "display_order": 7,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 23,
+   "curriculum_id": 1,
+   "course_id": 23,
+   "cycle": 6,
+   "display_order": 9,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 25,
+   "curriculum_id": 1,
+   "course_id": 25,
+   "cycle": 7,
+   "display_order": 2,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 26,
+   "curriculum_id": 1,
+   "course_id": 26,
+   "cycle": 7,
+   "display_order": 3,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 27,
+   "curriculum_id": 1,
+   "course_id": 27,
+   "cycle": 7,
+   "display_order": 6,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 28,
+   "curriculum_id": 1,
+   "course_id": 28,
+   "cycle": 7,
+   "display_order": 7,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 29,
+   "curriculum_id": 1,
+   "course_id": 29,
+   "cycle": 7,
+   "display_order": 8,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 30,
+   "curriculum_id": 1,
+   "course_id": 30,
+   "cycle": 8,
+   "display_order": 4,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 31,
+   "curriculum_id": 1,
+   "course_id": 31,
+   "cycle": 8,
+   "display_order": 2,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 32,
+   "curriculum_id": 1,
+   "course_id": 32,
+   "cycle": 8,
+   "display_order": 6,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 33,
+   "curriculum_id": 1,
+   "course_id": 33,
+   "cycle": 8,
+   "display_order": 3,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 34,
+   "curriculum_id": 1,
+   "course_id": 34,
+   "cycle": 8,
+   "display_order": 1,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 35,
+   "curriculum_id": 1,
+   "course_id": 35,
+   "cycle": 8,
+   "display_order": 5,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 36,
+   "curriculum_id": 1,
+   "course_id": 36,
+   "cycle": 8,
+   "display_order": 7,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 37,
+   "curriculum_id": 1,
+   "course_id": 37,
+   "cycle": 8,
+   "display_order": 8,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 38,
+   "curriculum_id": 1,
+   "course_id": 38,
+   "cycle": 8,
+   "display_order": 9,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 39,
+   "curriculum_id": 1,
+   "course_id": 39,
+   "cycle": 9,
+   "display_order": 6,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 40,
+   "curriculum_id": 1,
+   "course_id": 40,
+   "cycle": 9,
+   "display_order": 5,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 41,
+   "curriculum_id": 1,
+   "course_id": 41,
+   "cycle": 9,
+   "display_order": 7,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 42,
+   "curriculum_id": 1,
+   "course_id": 42,
+   "cycle": 9,
+   "display_order": 8,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 43,
+   "curriculum_id": 1,
+   "course_id": 43,
+   "cycle": 9,
+   "display_order": 9,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 44,
+   "curriculum_id": 1,
+   "course_id": 44,
+   "cycle": 10,
+   "display_order": 6,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 45,
+   "curriculum_id": 1,
+   "course_id": 45,
+   "cycle": 10,
+   "display_order": 4,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 46,
+   "curriculum_id": 1,
+   "course_id": 46,
+   "cycle": 10,
+   "display_order": 5,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 47,
+   "curriculum_id": 1,
+   "course_id": 47,
+   "cycle": 10,
+   "display_order": 7,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 48,
+   "curriculum_id": 1,
+   "course_id": 48,
+   "cycle": 10,
+   "display_order": 8,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 49,
+   "curriculum_id": 1,
+   "course_id": 49,
+   "cycle": 10,
+   "display_order": 9,
+   "credit": 3,
+   "category": "elective",
+   "is_active": true
+  },
+  {
+   "id": 50,
+   "curriculum_id": 1,
+   "course_id": 50,
+   "cycle": 1,
+   "display_order": 1,
+   "credit": 4,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 51,
+   "curriculum_id": 1,
+   "course_id": 51,
+   "cycle": 1,
+   "display_order": 2,
+   "credit": 3,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 52,
+   "curriculum_id": 1,
+   "course_id": 52,
+   "cycle": 1,
+   "display_order": 3,
+   "credit": 3,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 53,
+   "curriculum_id": 1,
+   "course_id": 53,
+   "cycle": 1,
+   "display_order": 4,
+   "credit": 3,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 54,
+   "curriculum_id": 1,
+   "course_id": 54,
+   "cycle": 1,
+   "display_order": 5,
+   "credit": 2,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 55,
+   "curriculum_id": 1,
+   "course_id": 55,
+   "cycle": 1,
+   "display_order": 6,
+   "credit": 5,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 56,
+   "curriculum_id": 1,
+   "course_id": 56,
+   "cycle": 2,
+   "display_order": 1,
+   "credit": 3,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 57,
+   "curriculum_id": 1,
+   "course_id": 57,
+   "cycle": 2,
+   "display_order": 2,
+   "credit": 3,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 58,
+   "curriculum_id": 1,
+   "course_id": 58,
+   "cycle": 2,
+   "display_order": 3,
+   "credit": 3,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 59,
+   "curriculum_id": 1,
+   "course_id": 59,
+   "cycle": 2,
+   "display_order": 4,
+   "credit": 3,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 60,
+   "curriculum_id": 1,
+   "course_id": 60,
+   "cycle": 2,
+   "display_order": 5,
+   "credit": 3,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 61,
+   "curriculum_id": 1,
+   "course_id": 61,
+   "cycle": 2,
+   "display_order": 6,
+   "credit": 5,
+   "category": "general_studies",
+   "is_active": true
+  },
+  {
+   "id": 62,
+   "curriculum_id": 1,
+   "course_id": 62,
+   "cycle": 3,
+   "display_order": 1,
+   "credit": 5,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 63,
+   "curriculum_id": 1,
+   "course_id": 63,
+   "cycle": 3,
+   "display_order": 2,
+   "credit": 2,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 64,
+   "curriculum_id": 1,
+   "course_id": 64,
+   "cycle": 3,
+   "display_order": 3,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 65,
+   "curriculum_id": 1,
+   "course_id": 65,
+   "cycle": 3,
+   "display_order": 4,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 66,
+   "curriculum_id": 1,
+   "course_id": 66,
+   "cycle": 3,
+   "display_order": 5,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 67,
+   "curriculum_id": 1,
+   "course_id": 67,
+   "cycle": 3,
+   "display_order": 6,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 68,
+   "curriculum_id": 1,
+   "course_id": 68,
+   "cycle": 4,
+   "display_order": 1,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 69,
+   "curriculum_id": 1,
+   "course_id": 69,
+   "cycle": 4,
+   "display_order": 2,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 70,
+   "curriculum_id": 1,
+   "course_id": 70,
+   "cycle": 4,
+   "display_order": 3,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 71,
+   "curriculum_id": 1,
+   "course_id": 71,
+   "cycle": 4,
+   "display_order": 4,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 72,
+   "curriculum_id": 1,
+   "course_id": 72,
+   "cycle": 4,
+   "display_order": 5,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 73,
+   "curriculum_id": 1,
+   "course_id": 73,
+   "cycle": 4,
+   "display_order": 6,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 74,
+   "curriculum_id": 1,
+   "course_id": 74,
+   "cycle": 5,
+   "display_order": 1,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 75,
+   "curriculum_id": 1,
+   "course_id": 75,
+   "cycle": 5,
+   "display_order": 2,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 76,
+   "curriculum_id": 1,
+   "course_id": 76,
+   "cycle": 5,
+   "display_order": 3,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 77,
+   "curriculum_id": 1,
+   "course_id": 77,
+   "cycle": 5,
+   "display_order": 4,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 78,
+   "curriculum_id": 1,
+   "course_id": 78,
+   "cycle": 5,
+   "display_order": 5,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 79,
+   "curriculum_id": 1,
+   "course_id": 79,
+   "cycle": 5,
+   "display_order": 6,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 80,
+   "curriculum_id": 1,
+   "course_id": 80,
+   "cycle": 6,
+   "display_order": 1,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 81,
+   "curriculum_id": 1,
+   "course_id": 81,
+   "cycle": 6,
+   "display_order": 2,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 82,
+   "curriculum_id": 1,
+   "course_id": 82,
+   "cycle": 6,
+   "display_order": 3,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 83,
+   "curriculum_id": 1,
+   "course_id": 83,
+   "cycle": 6,
+   "display_order": 4,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 84,
+   "curriculum_id": 1,
+   "course_id": 84,
+   "cycle": 6,
+   "display_order": 5,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 85,
+   "curriculum_id": 1,
+   "course_id": 85,
+   "cycle": 6,
+   "display_order": 6,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 86,
+   "curriculum_id": 1,
+   "course_id": 86,
+   "cycle": 7,
+   "display_order": 1,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 87,
+   "curriculum_id": 1,
+   "course_id": 87,
+   "cycle": 7,
+   "display_order": 4,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 88,
+   "curriculum_id": 1,
+   "course_id": 88,
+   "cycle": 7,
+   "display_order": 5,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 89,
+   "curriculum_id": 1,
+   "course_id": 89,
+   "cycle": 9,
+   "display_order": 1,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 90,
+   "curriculum_id": 1,
+   "course_id": 90,
+   "cycle": 9,
+   "display_order": 2,
+   "credit": 3,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 91,
+   "curriculum_id": 1,
+   "course_id": 91,
+   "cycle": 9,
+   "display_order": 3,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 92,
+   "curriculum_id": 1,
+   "course_id": 92,
+   "cycle": 9,
+   "display_order": 4,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 93,
+   "curriculum_id": 1,
+   "course_id": 93,
+   "cycle": 10,
+   "display_order": 1,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 94,
+   "curriculum_id": 1,
+   "course_id": 94,
+   "cycle": 10,
+   "display_order": 2,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  },
+  {
+   "id": 95,
+   "curriculum_id": 1,
+   "course_id": 95,
+   "cycle": 10,
+   "display_order": 3,
+   "credit": 4,
+   "category": "faculty",
+   "is_active": true
+  }
+ ],
+ "course_prerequisite": [
+  {
+   "id": 13,
+   "curriculum_id": 1,
+   "curriculum_course_id": 56,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 50,
+   "required_cycle": null
+  },
+  {
+   "id": 14,
+   "curriculum_id": 1,
+   "curriculum_course_id": 58,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 55,
+   "required_cycle": null
+  },
+  {
+   "id": 15,
+   "curriculum_id": 1,
+   "curriculum_course_id": 61,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 55,
+   "required_cycle": null
+  },
+  {
+   "id": 16,
+   "curriculum_id": 1,
+   "curriculum_course_id": 62,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 61,
+   "required_cycle": null
+  },
+  {
+   "id": 17,
+   "curriculum_id": 1,
+   "curriculum_course_id": 63,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 59,
+   "required_cycle": null
+  },
+  {
+   "id": 18,
+   "curriculum_id": 1,
+   "curriculum_course_id": 68,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 62,
+   "required_cycle": null
+  },
+  {
+   "id": 19,
+   "curriculum_id": 1,
+   "curriculum_course_id": 69,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 61,
+   "required_cycle": null
+  },
+  {
+   "id": 20,
+   "curriculum_id": 1,
+   "curriculum_course_id": 70,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 66,
+   "required_cycle": null
+  },
+  {
+   "id": 21,
+   "curriculum_id": 1,
+   "curriculum_course_id": 71,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 64,
+   "required_cycle": null
+  },
+  {
+   "id": 22,
+   "curriculum_id": 1,
+   "curriculum_course_id": 72,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 63,
+   "required_cycle": null
+  },
+  {
+   "id": 23,
+   "curriculum_id": 1,
+   "curriculum_course_id": 73,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 67,
+   "required_cycle": null
+  },
+  {
+   "id": 24,
+   "curriculum_id": 1,
+   "curriculum_course_id": 73,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 65,
+   "required_cycle": null
+  },
+  {
+   "id": 25,
+   "curriculum_id": 1,
+   "curriculum_course_id": 74,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 68,
+   "required_cycle": null
+  },
+  {
+   "id": 26,
+   "curriculum_id": 1,
+   "curriculum_course_id": 75,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 71,
+   "required_cycle": null
+  },
+  {
+   "id": 27,
+   "curriculum_id": 1,
+   "curriculum_course_id": 76,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 69,
+   "required_cycle": null
+  },
+  {
+   "id": 28,
+   "curriculum_id": 1,
+   "curriculum_course_id": 77,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 63,
+   "required_cycle": null
+  },
+  {
+   "id": 29,
+   "curriculum_id": 1,
+   "curriculum_course_id": 78,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 73,
+   "required_cycle": null
+  },
+  {
+   "id": 30,
+   "curriculum_id": 1,
+   "curriculum_course_id": 79,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 73,
+   "required_cycle": null
+  },
+  {
+   "id": 31,
+   "curriculum_id": 1,
+   "curriculum_course_id": 80,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 74,
+   "required_cycle": null
+  },
+  {
+   "id": 32,
+   "curriculum_id": 1,
+   "curriculum_course_id": 81,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 75,
+   "required_cycle": null
+  },
+  {
+   "id": 33,
+   "curriculum_id": 1,
+   "curriculum_course_id": 82,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 70,
+   "required_cycle": null
+  },
+  {
+   "id": 34,
+   "curriculum_id": 1,
+   "curriculum_course_id": 83,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 78,
+   "required_cycle": null
+  },
+  {
+   "id": 35,
+   "curriculum_id": 1,
+   "curriculum_course_id": 84,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 78,
+   "required_cycle": null
+  },
+  {
+   "id": 36,
+   "curriculum_id": 1,
+   "curriculum_course_id": 85,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 72,
+   "required_cycle": null
+  },
+  {
+   "id": 37,
+   "curriculum_id": 1,
+   "curriculum_course_id": 86,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 79,
+   "required_cycle": null
+  },
+  {
+   "id": 38,
+   "curriculum_id": 1,
+   "curriculum_course_id": 25,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 80,
+   "required_cycle": null
+  },
+  {
+   "id": 39,
+   "curriculum_id": 1,
+   "curriculum_course_id": 26,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 79,
+   "required_cycle": null
+  },
+  {
+   "id": 40,
+   "curriculum_id": 1,
+   "curriculum_course_id": 87,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 76,
+   "required_cycle": null
+  },
+  {
+   "id": 41,
+   "curriculum_id": 1,
+   "curriculum_course_id": 88,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 81,
+   "required_cycle": null
+  },
+  {
+   "id": 42,
+   "curriculum_id": 1,
+   "curriculum_course_id": 34,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 82,
+   "required_cycle": null
+  },
+  {
+   "id": 43,
+   "curriculum_id": 1,
+   "curriculum_course_id": 31,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 25,
+   "required_cycle": null
+  },
+  {
+   "id": 44,
+   "curriculum_id": 1,
+   "curriculum_course_id": 33,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 85,
+   "required_cycle": null
+  },
+  {
+   "id": 45,
+   "curriculum_id": 1,
+   "curriculum_course_id": 30,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 26,
+   "required_cycle": null
+  },
+  {
+   "id": 46,
+   "curriculum_id": 1,
+   "curriculum_course_id": 90,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 33,
+   "required_cycle": null
+  },
+  {
+   "id": 47,
+   "curriculum_id": 1,
+   "curriculum_course_id": 91,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 34,
+   "required_cycle": null
+  },
+  {
+   "id": 48,
+   "curriculum_id": 1,
+   "curriculum_course_id": 92,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 88,
+   "required_cycle": null
+  },
+  {
+   "id": 49,
+   "curriculum_id": 1,
+   "curriculum_course_id": 93,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 91,
+   "required_cycle": null
+  },
+  {
+   "id": 50,
+   "curriculum_id": 1,
+   "curriculum_course_id": 95,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 90,
+   "required_cycle": null
+  },
+  {
+   "id": 51,
+   "curriculum_id": 1,
+   "curriculum_course_id": 22,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 52,
+   "curriculum_id": 1,
+   "curriculum_course_id": 21,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 53,
+   "curriculum_id": 1,
+   "curriculum_course_id": 23,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 54,
+   "curriculum_id": 1,
+   "curriculum_course_id": 27,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 83,
+   "required_cycle": null
+  },
+  {
+   "id": 55,
+   "curriculum_id": 1,
+   "curriculum_course_id": 27,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 56,
+   "curriculum_id": 1,
+   "curriculum_course_id": 28,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 81,
+   "required_cycle": null
+  },
+  {
+   "id": 57,
+   "curriculum_id": 1,
+   "curriculum_course_id": 28,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 58,
+   "curriculum_id": 1,
+   "curriculum_course_id": 29,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 59,
+   "curriculum_id": 1,
+   "curriculum_course_id": 35,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 87,
+   "required_cycle": null
+  },
+  {
+   "id": 60,
+   "curriculum_id": 1,
+   "curriculum_course_id": 35,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 61,
+   "curriculum_id": 1,
+   "curriculum_course_id": 32,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 84,
+   "required_cycle": null
+  },
+  {
+   "id": 62,
+   "curriculum_id": 1,
+   "curriculum_course_id": 32,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 63,
+   "curriculum_id": 1,
+   "curriculum_course_id": 36,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 88,
+   "required_cycle": null
+  },
+  {
+   "id": 64,
+   "curriculum_id": 1,
+   "curriculum_course_id": 36,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 65,
+   "curriculum_id": 1,
+   "curriculum_course_id": 37,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 66,
+   "curriculum_id": 1,
+   "curriculum_course_id": 45,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 86,
+   "required_cycle": null
+  },
+  {
+   "id": 67,
+   "curriculum_id": 1,
+   "curriculum_course_id": 45,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 68,
+   "curriculum_id": 1,
+   "curriculum_course_id": 38,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 69,
+   "curriculum_id": 1,
+   "curriculum_course_id": 40,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 30,
+   "required_cycle": null
+  },
+  {
+   "id": 70,
+   "curriculum_id": 1,
+   "curriculum_course_id": 40,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 71,
+   "curriculum_id": 1,
+   "curriculum_course_id": 39,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 72,
+   "curriculum_id": 1,
+   "curriculum_course_id": 41,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 73,
+   "curriculum_id": 1,
+   "curriculum_course_id": 42,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 74,
+   "curriculum_id": 1,
+   "curriculum_course_id": 46,
+   "prerequisite_type": "course",
+   "prerequisite_curriculum_course_id": 89,
+   "required_cycle": null
+  },
+  {
+   "id": 75,
+   "curriculum_id": 1,
+   "curriculum_course_id": 46,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 76,
+   "curriculum_id": 1,
+   "curriculum_course_id": 44,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 77,
+   "curriculum_id": 1,
+   "curriculum_course_id": 47,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 78,
+   "curriculum_id": 1,
+   "curriculum_course_id": 48,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 79,
+   "curriculum_id": 1,
+   "curriculum_course_id": 49,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 5
+  },
+  {
+   "id": 80,
+   "curriculum_id": 1,
+   "curriculum_course_id": 43,
+   "prerequisite_type": "completed_cycle",
+   "prerequisite_curriculum_course_id": null,
+   "required_cycle": 6
+  }
+ ],
+ "specialty": [
+  {
+   "id": 1,
+   "career_id": 1,
+   "name": "Ingeniería de Software",
+   "description": "Electivos asociados al área de Ingeniería de Software.",
+   "is_active": true
+  },
+  {
+   "id": 2,
+   "career_id": 1,
+   "name": "Ciberseguridad",
+   "description": "Auditoría, seguridad ofensiva/defensiva, continuidad y control de sistemas.",
+   "is_active": false
+  },
+  {
+   "id": 3,
+   "career_id": 1,
+   "name": "Ciencia de Datos",
+   "description": "Analítica, inteligencia artificial, aprendizaje automático y explotación de datos.",
+   "is_active": false
+  },
+  {
+   "id": 4,
+   "career_id": 1,
+   "name": "Gestión de Sistemas",
+   "description": "ERP, procesos, gobierno de TI, operaciones y transformación digital.",
+   "is_active": false
+  },
+  {
+   "id": 5,
+   "career_id": 1,
+   "name": "Sistemas de Información",
+   "description": "Electivos asociados al área de Sistemas de Información.",
+   "is_active": true
+  },
+  {
+   "id": 6,
+   "career_id": 1,
+   "name": "Tecnologías de la Información",
+   "description": "Electivos asociados al área de Tecnologías de la Información.",
+   "is_active": true
+  },
+  {
+   "id": 7,
+   "career_id": 1,
+   "name": "Desarrollo de Videojuegos",
+   "description": "Electivos asociados al diploma de Desarrollo de Videojuegos.",
+   "is_active": true
+  }
+ ],
+ "curriculum_course_specialty": [
+  {
+   "curriculum_course_id": 21,
+   "specialty_id": 6
+  },
+  {
+   "curriculum_course_id": 22,
+   "specialty_id": 1
+  },
+  {
+   "curriculum_course_id": 23,
+   "specialty_id": 5
+  },
+  {
+   "curriculum_course_id": 27,
+   "specialty_id": 1
+  },
+  {
+   "curriculum_course_id": 28,
+   "specialty_id": 6
+  },
+  {
+   "curriculum_course_id": 29,
+   "specialty_id": 5
+  },
+  {
+   "curriculum_course_id": 32,
+   "specialty_id": 1
+  },
+  {
+   "curriculum_course_id": 32,
+   "specialty_id": 7
+  },
+  {
+   "curriculum_course_id": 35,
+   "specialty_id": 1
+  },
+  {
+   "curriculum_course_id": 36,
+   "specialty_id": 6
+  },
+  {
+   "curriculum_course_id": 37,
+   "specialty_id": 6
+  },
+  {
+   "curriculum_course_id": 38,
+   "specialty_id": 5
+  },
+  {
+   "curriculum_course_id": 39,
+   "specialty_id": 6
+  },
+  {
+   "curriculum_course_id": 40,
+   "specialty_id": 1
+  },
+  {
+   "curriculum_course_id": 40,
+   "specialty_id": 7
+  },
+  {
+   "curriculum_course_id": 41,
+   "specialty_id": 5
+  },
+  {
+   "curriculum_course_id": 42,
+   "specialty_id": 7
+  },
+  {
+   "curriculum_course_id": 44,
+   "specialty_id": 1
+  },
+  {
+   "curriculum_course_id": 44,
+   "specialty_id": 7
+  },
+  {
+   "curriculum_course_id": 45,
+   "specialty_id": 5
+  },
+  {
+   "curriculum_course_id": 46,
+   "specialty_id": 5
+  },
+  {
+   "curriculum_course_id": 47,
+   "specialty_id": 5
+  },
+  {
+   "curriculum_course_id": 47,
+   "specialty_id": 6
+  },
+  {
+   "curriculum_course_id": 48,
+   "specialty_id": 6
+  },
+  {
+   "curriculum_course_id": 49,
+   "specialty_id": 1
+  }
+ ],
+ "assessment_type": [
+  {
+   "id": 1,
+   "name": "Práctica Calificada",
+   "abbreviation": "PC",
+   "description": "Evaluación corta sobre temas recientes"
+  },
+  {
+   "id": 2,
+   "name": "Examen Parcial",
+   "abbreviation": "EP",
+   "description": "Evaluación de medio ciclo"
+  },
+  {
+   "id": 3,
+   "name": "Examen Final",
+   "abbreviation": "EF",
+   "description": "Evaluación final del curso"
+  },
+  {
+   "id": 4,
+   "name": "Trabajo Académico",
+   "abbreviation": "TA",
+   "description": "Proyecto o trabajo grupal/individual"
+  },
+  {
+   "id": 5,
+   "name": "Participación",
+   "abbreviation": "PAR",
+   "description": "Participación en clase y actividades"
+  },
+  {
+   "id": 6,
+   "name": "Control de Lectura",
+   "abbreviation": "CL",
+   "description": "Evaluación sobre lecturas asignadas"
+  },
+  {
+   "id": 7,
+   "name": "Proyecto",
+   "abbreviation": "PROY",
+   "description": "Proyecto integrador del curso"
+  },
+  {
+   "id": 8,
+   "name": "Estudio de caso",
+   "abbreviation": "EDC",
+   "description": null
+  },
+  {
+   "id": 9,
+   "name": "Examen escrito",
+   "abbreviation": "EE",
+   "description": null
+  },
+  {
+   "id": 10,
+   "name": "Trabajo de investigación",
+   "abbreviation": "TDI",
+   "description": null
+  },
+  {
+   "id": 11,
+   "name": "Exposición",
+   "abbreviation": "E",
+   "description": null
+  },
+  {
+   "id": 12,
+   "name": "Trabajo de Producción",
+   "abbreviation": "TDP",
+   "description": null
+  },
+  {
+   "id": 13,
+   "name": "Informe",
+   "abbreviation": "I",
+   "description": null
+  },
+  {
+   "id": 14,
+   "name": "Práctica en laboratorio",
+   "abbreviation": "PEL",
+   "description": null
+  },
+  {
+   "id": 15,
+   "name": "Propuesta de Trabajo final",
+   "abbreviation": "PDTF",
+   "description": null
+  },
+  {
+   "id": 16,
+   "name": "Exposición de trabajo final",
+   "abbreviation": "EDTF",
+   "description": null
+  },
+  {
+   "id": 17,
+   "name": "Laboratorio",
+   "abbreviation": "L",
+   "description": null
+  },
+  {
+   "id": 18,
+   "name": "Proyecto final",
+   "abbreviation": "PF",
+   "description": null
+  },
+  {
+   "id": 19,
+   "name": "Informe y sustentación",
+   "abbreviation": "IYS",
+   "description": null
+  },
+  {
+   "id": 20,
+   "name": "Ejercicio individual 1",
+   "abbreviation": "EI1",
+   "description": null
+  },
+  {
+   "id": 21,
+   "name": "Ejercicio individual 2",
+   "abbreviation": "EI2",
+   "description": null
+  },
+  {
+   "id": 22,
+   "name": "Ejercicio individual 3",
+   "abbreviation": "EI3",
+   "description": null
+  },
+  {
+   "id": 23,
+   "name": "Ejercicio individual",
+   "abbreviation": "EI",
+   "description": null
+  },
+  {
+   "id": 24,
+   "name": "Ejercicio individual (EI)",
+   "abbreviation": "EI",
+   "description": null
+  },
+  {
+   "id": 25,
+   "name": "Proyecto (PR)",
+   "abbreviation": "PR",
+   "description": null
+  },
+  {
+   "id": 26,
+   "name": "Ejercicio colaborativo",
+   "abbreviation": "EC",
+   "description": null
+  },
+  {
+   "id": 27,
+   "name": "Examen Escrito (EE)",
+   "abbreviation": "EE",
+   "description": null
+  },
+  {
+   "id": 28,
+   "name": "Examen escrito 1",
+   "abbreviation": "EE1",
+   "description": null
+  },
+  {
+   "id": 29,
+   "name": "Examen escrito 2",
+   "abbreviation": "EE2",
+   "description": null
+  },
+  {
+   "id": 30,
+   "name": "Examen escrito 3",
+   "abbreviation": "EE3",
+   "description": null
+  },
+  {
+   "id": 31,
+   "name": "Ejercicio Individual (EI) - actividades agrupadas",
+   "abbreviation": "EI",
+   "description": null
+  },
+  {
+   "id": 32,
+   "name": "Exposición oral",
+   "abbreviation": "EO",
+   "description": null
+  },
+  {
+   "id": 33,
+   "name": "Ejercicio colaborativo 1.1 y 1.2",
+   "abbreviation": "EC11Y1",
+   "description": null
+  },
+  {
+   "id": 34,
+   "name": "Ensayo",
+   "abbreviation": "E",
+   "description": null
+  },
+  {
+   "id": 35,
+   "name": "Debate",
+   "abbreviation": "D",
+   "description": null
+  },
+  {
+   "id": 36,
+   "name": "Ejercicios colaborativos",
+   "abbreviation": "EC",
+   "description": null
+  },
+  {
+   "id": 37,
+   "name": "Estudio de caso 1",
+   "abbreviation": "EDC1",
+   "description": null
+  },
+  {
+   "id": 38,
+   "name": "Estudio de caso 2",
+   "abbreviation": "EDC2",
+   "description": null
+  },
+  {
+   "id": 39,
+   "name": "Estudio de caso 3",
+   "abbreviation": "EDC3",
+   "description": null
+  },
+  {
+   "id": 40,
+   "name": "Ejercicio colaborativo 1",
+   "abbreviation": "EC1",
+   "description": null
+  },
+  {
+   "id": 41,
+   "name": "Proyecto 1",
+   "abbreviation": "P1",
+   "description": null
+  },
+  {
+   "id": 42,
+   "name": "Ejercicio colaborativo 2",
+   "abbreviation": "EC2",
+   "description": null
+  },
+  {
+   "id": 43,
+   "name": "Proyecto 2",
+   "abbreviation": "P2",
+   "description": null
+  },
+  {
+   "id": 44,
+   "name": "Sustentación Oral",
+   "abbreviation": "SO",
+   "description": null
+  },
+  {
+   "id": 45,
+   "name": "Evaluación mediante prueba",
+   "abbreviation": "EMP",
+   "description": null
+  },
+  {
+   "id": 46,
+   "name": "Desempeño ante el público",
+   "abbreviation": "DAEP",
+   "description": null
+  },
+  {
+   "id": 47,
+   "name": "Examen Escrito 4",
+   "abbreviation": "EE4",
+   "description": null
+  },
+  {
+   "id": 48,
+   "name": "Ejercicio colaborativo (EB) 1",
+   "abbreviation": "EB",
+   "description": null
+  },
+  {
+   "id": 49,
+   "name": "Examen escrito (EE) 1",
+   "abbreviation": "EE",
+   "description": null
+  },
+  {
+   "id": 50,
+   "name": "Ejercicio colaborativo (EB) 2",
+   "abbreviation": "EB",
+   "description": null
+  },
+  {
+   "id": 51,
+   "name": "Examen escrito (EE) 2",
+   "abbreviation": "EE",
+   "description": null
+  },
+  {
+   "id": 52,
+   "name": "Ejercicio Colaborativo (EB)",
+   "abbreviation": "EB",
+   "description": null
+  },
+  {
+   "id": 53,
+   "name": "Portafolio (PF)",
+   "abbreviation": "PF",
+   "description": null
+  },
+  {
+   "id": 54,
+   "name": "Informe del trabajo de investigación (IF)",
+   "abbreviation": "IF",
+   "description": null
+  },
+  {
+   "id": 55,
+   "name": "Exposición del trabajo de investigación (EX)",
+   "abbreviation": "EX",
+   "description": null
+  },
+  {
+   "id": 56,
+   "name": "Trabajo de investigación (TI1)",
+   "abbreviation": "TI1",
+   "description": null
+  },
+  {
+   "id": 57,
+   "name": "Examen escrito No.1 (EE1)",
+   "abbreviation": "EE1",
+   "description": null
+  },
+  {
+   "id": 58,
+   "name": "Trabajo de investigación (TI2)",
+   "abbreviation": "TI2",
+   "description": null
+  },
+  {
+   "id": 59,
+   "name": "Examen escrito No.2 (EE2)",
+   "abbreviation": "EE2",
+   "description": null
+  },
+  {
+   "id": 60,
+   "name": "Proyecto de experimentación",
+   "abbreviation": "PDE",
+   "description": null
+  },
+  {
+   "id": 61,
+   "name": "Informe (propuesta de proyecto)",
+   "abbreviation": "IPDP",
+   "description": null
+  },
+  {
+   "id": 62,
+   "name": "Examen escrito de modelamiento (EE)",
+   "abbreviation": "EE",
+   "description": null
+  },
+  {
+   "id": 63,
+   "name": "Examen escrito de análisis y rediseño (EE)",
+   "abbreviation": "EE",
+   "description": null
+  },
+  {
+   "id": 64,
+   "name": "Examen Escrito (EE) 3",
+   "abbreviation": "EE",
+   "description": null
+  },
+  {
+   "id": 65,
+   "name": "Sustentación (SU)",
+   "abbreviation": "SU",
+   "description": null
+  },
+  {
+   "id": 66,
+   "name": "Práctica en laboratorio (LB)",
+   "abbreviation": "LB",
+   "description": null
+  },
+  {
+   "id": 67,
+   "name": "Desempeño ante público",
+   "abbreviation": "DAP",
+   "description": null
+  },
+  {
+   "id": 71,
+   "name": "Examen",
+   "abbreviation": null,
+   "description": "Detectado en los sílabos de 2026-2"
+  },
+  {
+   "id": 72,
+   "name": "Propuesta de trabajo",
+   "abbreviation": null,
+   "description": "Detectado en los sílabos de 2026-2"
+  },
+  {
+   "id": 73,
+   "name": "Exposición de Trabajos finales",
+   "abbreviation": null,
+   "description": "Detectado en los sílabos de 2026-2"
+  }
+ ]
+}

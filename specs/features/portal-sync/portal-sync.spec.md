@@ -1,0 +1,469 @@
+---
+name: Portal Sync
+description: Carga de ciclo por alumno desde el portal miUlima (webaloe.ulima.edu.pe/portalUL) hacia PostgreSQL, usando la sesión del portal que el alumno abre en la app; incluye sílabos desde la base Domino cactus.ulima.edu.pe, vía la misma sesión SSO.
+targets:
+  - ../../../src/modules/portal-sync/**
+  - ../../../src/modules/index.ts
+  - ../../../src/services/portal.client.ts
+  - ../../../src/config/env.ts
+  - ../../../src/config/app-config.ts
+  - ../../../src/server.ts
+  - ../../../src/shared/middleware/rate-limit.ts
+  - ../../../src/db/schema/schema.ts
+  - ../../../src/db/seed/malla_horas.ts
+  - ../../../src/db/seed/equivalencias.ts
+  - ../../../src/db/seed/equivalencias.logic.ts
+  - ../../../drizzle/**
+  - ../../../test/HU31_jeff/**
+---
+
+# Portal Sync
+
+> Estado: **aprobada e implementada**. Revisada el 2026-09-02 contra el esquema real, los fixtures del portal y las convenciones del repo; las correcciones de esa revisión ya están incorporadas. Se agregó el sílabo (nueva fuente Domino, `cactus.ulima.edu.pe`) el mismo día, aprobado por el owner (ver §SSO, §Sílabos, §Decisiones); ese lote pasó por una revisión independiente y sus hallazgos también están incorporados (`on conflict do nothing` sin target, presupuesto de ejecución corregido y limitaciones conocidas en §Sincronización paso 12). Pendiente: aplicar en la base de datos real la migración `drizzle/0004_portal_sync_final_grade.sql` y correr la verificación manual end-to-end contra el portal miUlima (ver §Verification). Quedan además decisiones sueltas sin resolver que no bloquean el desarrollo (ver §Decisiones pendientes).
+>
+> **RS-BE-9 (§Horas de clase del ciclo): APROBADA el 2026-09-06 e implementada.** Corrige `course_offering.total_hours`, que se calculaba como `créditos × 16` y subestimaba las horas de clase entre 20% y 40%. Cableado completo: `resolveOfferingTotalHours` decide, `upsertCourse` trae `course.weekly_hours`, el paso 7 escribe la estimación y el paso 8.b la pisa con el horario real. **Ejecutado contra la base el 2026-09-06**: migración `0009` aplicada con `db:apply`; `src/db/seed/malla_horas.ts --apply` cargó los 74 cursos del plan; y `src/db/seed/backfill_total_hours.ts --apply` corrigió las 74 ofertas del período activo (62 venían en 0, 12 del `créditos × 16`). Ninguna bajó de total. El período cerrado 2026-1 quedó intacto. Verificado además contra el propio portal: su «Total horas programadas» coincide 5/5 con los valores resultantes.
+
+> **Orden obligatorio: la migración va ANTES del deploy de este código.** `upsertCourse` pide `weekly_hours` en su `returning`, así que contra una base sin la columna la importación falla entera (error de SQL, no degradación). No es que caiga a créditos: revienta. Con la columna creada pero el seed sin correr, `weekly_hours` es `NULL` en todos los cursos y la precedencia sí cae a créditos, que es el comportamiento anterior — ese estado intermedio es seguro.
+>
+> **Ampliación 2026-09-06 — equivalencias de malla (§Equivalencias de malla).** Segundo intento de emparejamiento del récord contra la malla vigente, para los cursos cuyo código quedó en el plan anterior (26 de los 53 aprobados del récord real medido). Implementado, probado y **aplicado en la BD el 2026-09-06** (migración `drizzle/0008_course_equivalence.sql` + seed de 14 filas; ver `MIGRATIONS.md`). Verificado contra el récord real del alumno medido: de 53 cursos aprobados pasan a emparejar 41 (27 por código + 14 por equivalencia) y quedan 12 sin emparejar. Esos 12 son los de Estudios Generales: esperan la tabla oficial 2026-1 ↔ 2025-1 y **no se inventan**. El efecto no es retroactivo — cada alumno lo recoge en su próxima importación.
+
+> **Enmienda propuesta el 2026-09-25 por `specs/features/recarga-portal/recarga-portal.spec.md` y aprobada por el dueño el 2026-09-26 con esa spec, con RS-BE-48 en `main` y lo demás con la implementación en `feat/recarga-notas-asistencia`, sin mergear.** La ULima cambia el menú lateral del Aula Virtual y la importación deja de leer la asistencia y, muy probablemente, los delegados (RS-BE-48). La misma spec suma `POST /portal-sync/refresh`, que con un solo inicio de sesión lee la asistencia y las notas parciales del panel Nota sin repetir esta importación (RS-BE-49 a RS-BE-60). Las notas de RS-BE-4, del límite de importaciones, de `ComandoListarConsNotas` y de §Privacidad y base legal marcan lo que cambia. Hasta que la implementación llegue a producción, el backend desplegado sigue el texto sin enmendar.
+
+## Contexto
+
+ULima++ trabaja sobre su propio PostgreSQL. Hoy los datos académicos se cargan a mano. Esta feature permite que **cada alumno importe sus datos oficiales desde miUlima una vez por ciclo** (y las veces que quiera repetirlo). Después de la importación, el resto de la app sigue funcionando con sus propias funcionalidades; **el login de ULima++ no cambia**.
+
+El portal solo muestra los datos del alumno autenticado. Por eso la carga es **incremental y compartida**: el primer alumno que sincroniza crea el período, los cursos, las secciones, los docentes y los horarios de sus cursos; los siguientes reutilizan lo que ya existe y solo agregan lo suyo (matrícula, progreso).
+
+### Cómo se obtiene la sesión del portal
+
+El alumno inicia sesión en miUlima **dentro de un WebView de la app** (usuario, contraseña y código RSA SecurID de Google Authenticator). El backend **nunca recibe la contraseña ni el código TOTP**: recibe solo las cookies de sesión que el portal dejó en el WebView, las usa durante la importación y al terminar cierra la sesión del portal.
+
+Flujo del portal verificado el 2026-09-01 (spike `spike-portal/fetch_portal.py`, fuera del repo):
+
+1. `GET /portalUL/layout.jsp` sin sesión → 302 `inicio.jsp`.
+2. `POST /portalUL/j_security_check` (`j_username`, `j_password`, `ac`, `url2`) → 302 `authentication.jsp` → 302 `solicitarValidarToken.jsp?bAv=0`.
+3. `POST solicitarValidarToken.jsp?bAv=0` (`sPasscode`, `url2`) → 302 si el código es válido; **200 con la misma página** si es rechazado (sin mensaje distinguible).
+4. `authentication.jsp` → `redirectJsp.jsp` → (JS) `layout.jsp`. Cookies resultantes: `JSESSIONID`, `LtpaToken2`, `LtpaToken`.
+
+Los pasos 1 a 4 los ejecuta el **WebView**, no el backend. El backend solo consume las cookies del paso 4.
+
+### SSO con la base de sílabos (Domino)
+
+La Universidad corre **dos sistemas con inicio de sesión único (SSO)**: el portal del alumno (`webaloe.ulima.edu.pe`, WebSphere) y la base de sílabos (`cactus.ulima.edu.pe`, Domino). WebSphere deja la cookie `LtpaToken` con `Domain=.ulima.edu.pe` (no atada a un host); LTPA es el token SSO de IBM entre WebSphere y Domino.
+
+**Verificado empíricamente el 2026-09-02**: la misma petición hecha con las cookies de la sesión del portal a la base de sílabos de Domino devuelve el MISMO documento que un login directo a Domino, y ninguna de las dos respuestas es una página de login. Es decir, las cookies que `portal-sync` ya recibe del WebView del portal **alcanzan para leer sílabos de Domino, sin segundo login ni credenciales adicionales**.
+
+### Páginas fuente (relativas a `/portalUL/`, ISO-8859-1)
+
+| Página | Contenido usado |
+| --- | --- |
+| `layout.jsp` (pestaña Académico) | Ciclo activo, nombre completo, carrera, PPA, ubicación relativa, nivel del último período, bloque **Aula Virtual** (código, nombre completo, sección, docente), **horario** semanal, impedimentos y deuda de matrícula. |
+| `gama/servlets/ComandoMostrarConsMatr?COCICLO=<AAAAN>&Fg=1` | **Consolidado de matrícula** del ciclo: código de alumno (identidad), carrera, y por curso código, sección, grupo, nombre, nivel, créditos y vez. Fuente principal de `enrollment`/`section`. |
+| `gada/servlets/ComandoListarRecordAcademico?ac=<ts>` | **Récord académico** completo: por ciclo, código, nombre, vez, créditos, nota, sección. Fuente de `student_course_progress`. |
+| `ul/servlets/ComandoVisualizarDatosPersonales` | Solo se lee para completar `app_user.full_name` si está vacío. **No se importa ningún otro campo.** |
+| `servlets/CustomLogoutServlet` | Cierre de sesión al terminar. |
+
+**Ciclo activo (`COCICLO`)**: se obtiene SIEMPRE de `layout.jsp` mediante `parseCicloActivo` (rótulos `CICLO: 2026-2` de los bloques Información para Matrícula / Aula Virtual). Nunca se hardcodea ni se toma de la BD. Formatos: `20262` en las URL de matrícula, `AAAA-N` en `academic_period.code`.
+
+`gada/servlets/ComandoListarConsNotas` **no se usa**: para el ciclo en curso devuelve `0` (no vacío) en todas las notas, lo que marcaría como desaprobados los cursos activos.
+
+*Propuesta del 2026-09-25 y aprobada por el dueño el 2026-09-26 (`recarga-portal.spec.md`, RS-BE-52 y RS-BE-53), con la implementación en `feat/recarga-notas-asistencia`, sin mergear.* Las notas parciales por evaluación del ciclo en curso tampoco salen de `ComandoListarConsNotas`. Salen del panel Nota del Aula Virtual (tabla «Detalle Evaluaciones» del marco `ComandoConsultarTareaAcademica`), y las lee solo `POST /portal-sync/refresh`, no esta importación.
+
+### Sílabos (fuente nueva: Domino, `cactus.ulima.edu.pe`, JSON, UTF-8)
+
+Fuente **distinta** de las anteriores: otro host (§SSO), otra base (`ac_bd001.nsf`, no `/portalUL/`) y otro formato (JSON, no HTML). El sílabo de UN curso en UN ciclo se obtiene con:
+
+```text
+https://cactus.ulima.edu.pe/ac/ac_bd001.nsf/vSyllabusXCicloAV?ReadViewEntries&OutputFormat=JSON&Count=5&RestrictToCategory=<COCICLO>_<courseCode>
+```
+
+`COCICLO` es el mismo `cocicloUrl` que resuelve `parseCicloActivo` (ya usado para matrícula); `courseCode` es el código de curso del consolidado. Respuesta real verificada, sin datos personales, guardada en `test/HU31_jeff/fixtures/silabo.json`.
+
+Forma de la respuesta: `viewentry[]["@unid"]` es el id único del documento Domino (UNID). `viewentry[].entrydata[].text["0"]` trae, en una de sus entradas, un fragmento JavaScript con `AbreArchivo('vSyllabusXCicloAV/<UNID>/$File/<filename>.pdf')`; el `filename` lleva el ciclo y el nombre del curso, p. ej. `2026-2 SIL PLANEAMIENTO ESTRATÉGICO.pdf`.
+
+Se piden `Count=5` entradas, así que la categoría puede traer **más de una** (un sílabo republicado que convive con el anterior, o un documento sin adjunto listado primero): se recorren todas en orden y se toma la **primera usable**. Quedarse con `viewentry[0]` perdía el sílabo aunque estuviera publicado.
+
+**Gotcha de charset, ya observado**: el cuerpo es UTF-8 aunque el `Content-Type` declare otra cosa. Decodificar según el `Content-Type` mancha los acentos; `PortalClient.fetchSyllabus` decodifica SIEMPRE como UTF-8, sin mirarlo (a diferencia de `fetchPage`, que sí respeta el `Content-Type` para `webaloe`).
+
+**Gotcha de JSON, ya observado**: Domino emite el fragmento JS (dentro de un comentario HTML `<!-- ... -->`) con escapes de barra invertida que NO son válidos en JSON estricto (`\!`, `\>`): `JSON.parse` directo sobre una respuesta real y bien formada falla con "Bad escaped character". `parseSyllabusEntry` normaliza esos escapes antes de parsear, **eliminando** la barra invertida sobrante (`\!` → `!`), no duplicándola: duplicarla deja una barra literal en el texto ya parseado, que termina en `syllabus.title` y percent-codificada (`%5C`) en `drive_file_url`, apuntando a un adjunto que en Domino no existe. La normalización consume primero los escapes JSON válidos, así que un cuerpo que ya era válido no se rompe (ver comentario en `src/modules/portal-sync/parsers/silabo.ts`).
+
+Que un curso no tenga sílabo publicado (`viewentry` vacío) es normal, no un error: `parseSyllabusEntry` devuelve `null`, igual que ante JSON malformado. No sigue el patrón `ParseResult` de los demás parsers (no hay `warnings` por curso; ver §Sincronización paso 12).
+`[@test] ../../../test/HU31_jeff/parsers.silabo.test.ts`
+
+## Requirements
+
+- RS-BE-1: El alumno autenticado en ULima++ puede importar sus datos del ciclo activo desde miUlima usando la sesión que abrió en el WebView.
+- RS-BE-2: La importación es **idempotente**: repetirla no duplica ni borra datos, solo actualiza.
+- RS-BE-3: Los datos compartidos (período, curso, oferta, docente, sección, sesiones) se reutilizan por **clave natural** mediante upsert atómico; los datos del alumno (matrícula, progreso) se crean solo para él.
+- RS-BE-4: La importación **nunca** toca datos propios de la app: `simulated_grades`, `student_curriculum_simulation`, `student_specialty`, `announcement`, `course_advising_session`, `advising_rsvp`, `user_social_link`, `section_representative` ni `schedule_session.color_hex`. **Enmendado el 2026-09-06 (RS-BE-15):** las horas de asistencia de `enrollment` salieron de esta lista y ahora SÍ se importan, pero solo desde el panel Asistencia del Aula Virtual y solo las del alumno autenticado. Ver `specs/features/asistencia-portal/asistencia-portal.spec.md`. *Propuesta del 2026-09-25 y aprobada por el dueño el 2026-09-26 (`recarga-portal.spec.md`), con la implementación en `feat/recarga-notas-asistencia`, sin mergear.* La importación tampoco toca `student_portal_score`, que escribe solo `POST /portal-sync/refresh` (RS-BE-55), y fija `enrollment.portal_attendance_read_at` en el mismo `UPDATE` de las horas (RS-BE-58).
+- RS-BE-5: La app puede consultar si el alumno **necesita** importar.
+- RS-BE-6: El backend aborta sin escribir nada si no puede **probar** que la sesión del portal pertenece al alumno autenticado.
+- RS-BE-7: Ni la contraseña ni el TOTP ni las cookies del portal se persisten ni se registran en logs. Las cookies viven solo en memoria durante la petición.
+- RS-BE-8: La importación nunca puede dejar al alumno sin acceso a la app.
+- RS-BE-9: `course_offering.total_hours` son **horas de clase reales** del ciclo (`horas semanales × semanas del período`), no un derivado de los créditos. La fuente se elige por precedencia: horario importado > malla oficial > créditos como último recurso. `[@test] ../../../test/HU31_jeff/repository.hours.test.ts`
+
+## Arquitectura
+
+Estructura obligatoria del repo (`routes -> controller -> service -> repository`):
+
+```text
+src/modules/portal-sync/
+  index.ts                     registro del módulo
+  portal-sync.routes.ts        endpoints Hono + authMiddleware + requireRole
+  portal-sync.controller.ts    adapta HTTP, valida DTO, arma respuesta
+  portal-sync.service.ts       orquestación: descarga → parsers → upsert
+  portal-sync.repository.ts    TODAS las consultas Drizzle y la transacción
+  portal-sync.schemas.ts       Zod del body
+  portal-sync.types.ts         DTOs de respuesta
+  parsers/                     funciones puras HTML → DTO, sin dependencias
+src/services/portal.client.ts  cliente HTTP del portal (patrón de cohere.client.ts)
+```
+
+## API Contract Draft
+
+Ver `docs/specs/api-contracts.md`, sección **Portal Sync**.
+
+- `GET /portal-sync/status` — `{ activePeriod, needsImport, enrollmentsInActivePeriod }`.
+- `POST /portal-sync/import` — body `{ cookies }` **o** `{ credentials }`, más el campo opcional `consent` (RS-BE-29 de `../academic-record/academic-record.spec.md`); response `{ period, identity, summary, warnings }`.
+
+## Rules
+
+### Autorización e identidad
+
+- Ambas rutas: `authMiddleware` + `requireRole(...STUDENT_ROLES)`. Del contexto solo se leen `userId` y `studentId`: `AuthVariables` (`src/shared/middleware/auth-middleware.ts`) **no expone `code`**. El código del alumno se obtiene con una consulta a `app_user` por `userId` dentro del repository.
+- **Verificación de identidad, antes de cualquier escritura y sin degradación**: `parseConsolidadoMatricula` es la fuente. Si devuelve `{ ok: false }`, si su encabezado no trae la columna `CÓDIGO`, o si el código extraído difiere de `app_user.code`, la importación **aborta y no escribe nada**:
+  - código distinto → `403 PORTAL_IDENTITY_MISMATCH`;
+  - código ilegible o parser fallido → `422 PORTAL_IDENTITY_UNVERIFIABLE`.
+  Esta es la **única** excepción a la regla de degradar parsers a `warnings`.
+
+  **Enmendado por `specs/features/registro/registro.spec.md` (RS-BE-17/RS-BE-18).** Este paso tiene ahora dos modos, según si `runImport` recibe o no un hook de aprovisionamiento (`provision`):
+  - **Sin hook (importación normal, sin cambios)**: hay una cuenta autenticada previa. La comprobación de arriba se mantiene intacta — el código del portal debe coincidir con `app_user.code`, o aborta con `403`/`422` como siempre. Es lo que impide que alguien importe el ciclo de otro.
+  - **Con hook (registro, RS-BE-17)**: no existe cuenta previa contra la cual comparar. El código del portal **es** la identidad: `provision` crea `app_user` y `student` dentro de la misma transacción, con los datos que el portal certificó, y la importación sigue con los ids que ese hook devuelve. No hay `PORTAL_IDENTITY_MISMATCH` posible en este modo porque no hay nada previo con qué contrastar.
+  Un segundo hook opcional, `validate`, corre como último paso dentro de la misma transacción — lo usa el registro para exigir al menos una matrícula del ciclo activo (`403 NOT_ENROLLED`) antes de confirmar; si `validate` lanza, la transacción entera revierte (RS-BE-18), cuenta recién creada incluida.
+  `[@test] ../../../test/HU31_jeff/service.import.test.ts`
+  `[@test] ../../../test/HU33_jeff/service.registro-import.test.ts`
+- Si el portal responde `inicio.jsp` o `solicitarValidarToken.jsp` en cualquier descarga → **`409 PORTAL_SESSION_INVALID`**. Se usa 409 y **no 401** a propósito: `ApiClient` del frontend trata todo 401 como expiración del JWT de ULima++ y cierra la sesión del usuario.
+  `[@test] ../../../test/HU31_jeff/portal.client.test.ts`
+- Portal 5xx o error de conexión → `502 PORTAL_UNAVAILABLE`; exceso de `PORTAL_TIMEOUT_MS` → `504 PORTAL_TIMEOUT`.
+  `[@test] ../../../test/HU31_jeff/portal.client.test.ts`
+- Rate limit: 5 importaciones por alumno por hora (`src/shared/middleware/rate-limit.ts`), porque cada llamada dispara ~8-10 peticiones salientes a los sistemas de la Universidad (`layout.jsp` + matrícula + récord + un sílabo por curso distinto). El contador vive en memoria, igual que el del chatbot: en serverless el límite es por instancia, no global.
+  *Propuesta del 2026-09-25 y aprobada por el dueño el 2026-09-26 (`recarga-portal.spec.md`, RS-BE-50 y RS-BE-60), con la implementación en `feat/recarga-notas-asistencia`, sin mergear.* Las 8 a 10 peticiones de esta línea son anteriores a las fases de delegados y asistencia, y hoy la importación hace unas 28. La recarga tiene su propio cupo, y un tope de 3 inicios de sesión rechazados cada 15 minutos por alumno se cuenta junto con los de esta importación con `credentials`, se revisa en `importFromPortal` antes de `login` y responde `429 RATE_LIMITED` con `details.kind: "rejected_logins"`. El `429` de cupo de esta importación suma `details.kind: "quota"`, y con `credentials` responde `409 PORTAL_REFRESH_IN_PROGRESS` si hay una recarga del mismo alumno en curso. El inicio de sesión que falla después de que el frasco recibe un `JSESSIONID`, incluida la contraseña rechazada, cierra esa sesión con las cookies del frasco antes de lanzar su error, también en `POST /auth/register`.
+
+### Login con credenciales (`credentials`)
+
+El body de `POST /portal-sync/import` acepta **una de dos formas**, nunca las dos:
+
+- `{ cookies: { JSESSIONID, LtpaToken2, LtpaToken? } }` — la sesión del portal ya la obtuvo el cliente.
+- `{ credentials: { password, passcode } }` — el backend hace el login contra miUlima y obtiene la sesión él mismo.
+
+Junto a cualquiera de las dos viaja el campo **opcional** `consent: true` (**RS-BE-29** de `../academic-record/academic-record.spec.md`): el alumno aceptó la pantalla de consentimiento del récord académico. Es ortogonal a la forma de la sesión y no interviene en el login; solo decide si la importación guarda además la copia del récord, la foto acumulada y el resumen por ciclo. Sin él la importación corre igual que hoy.
+
+**Decisión del owner (2026-09-02)**: el diseño original era que el alumno se
+logueara dentro de un WebView y la app solo leyera las cookies, de modo que la
+contraseña nunca saliera del portal. Se descartó porque `JSESSIONID` y
+`LtpaToken2` son `HttpOnly` y leerlas exige verificar `CookieManager` contra un
+iPhone real, un prerrequisito que el owner prefirió no pagar. La consecuencia
+aceptada es que la contraseña de miUlima pasa por la app y por este backend.
+
+**Por eso estas reglas no son opcionales:**
+
+- La contraseña y el passcode **nunca** se registran: ni en logs, ni en mensajes
+  de error, ni en trazas. Ningún `HttpError` los incluye.
+- **Nunca** se persisten: no van a la base de datos, ni a caché, ni a disco.
+  Viven solo en la variable local del login y se descartan al terminar.
+- **No se piden en el body**: el usuario del portal es el código del alumno, que
+  el backend ya tiene en `app_user.code` a partir del JWT. Pedirlo al cliente
+  sería innecesario y agregaría una vía para suplantar a otro alumno.
+
+**Flujo**, el mismo verificado en el spike (§Cómo se obtiene la sesión):
+`GET layout.jsp` → `POST j_security_check` con el código y la contraseña →
+`POST solicitarValidarToken.jsp?bAv=0` con el passcode → verificación con
+`layout.jsp`. **Nunca se vuelve a pedir `redirectJsp.jsp`**: hacerlo tumba la
+sesión recién creada.
+
+**Detección de fallo**, que no es obvia: un passcode rechazado devuelve **HTTP
+200 con la misma página y sin mensaje de error**. La única señal fiable de éxito
+es la redirección. Por eso el criterio es la redirección y no el status ni el
+texto.
+
+- Credenciales o passcode rechazados → **`409 PORTAL_LOGIN_REJECTED`**.
+  **Nunca 401**: el `ApiClient` de la app trata cualquier 401 como expiración del
+  JWT y cierra la sesión de ULima++; un tipeo en el passcode no puede echar al
+  alumno de la app.
+- El mensaje no distingue si falló la contraseña o el passcode: distinguirlo le
+  daría a un atacante una forma de verificar contraseñas.
+
+**Devolución de cupo**: el rate limit de 5 por hora descuenta ANTES de trabajar.
+Un passcode es de 6 dígitos y caduca cada 30 s, así que equivocarse es normal:
+cinco tipeos dejarían al alumno bloqueado una hora sin haber importado nunca.
+Un `PORTAL_LOGIN_REJECTED` **devuelve el cupo consumido**. Los demás fallos no:
+un 502 del portal sí consumió trabajo real.
+
+### Cliente del portal (`src/services/portal.client.ts`)
+
+- Variables nuevas en `src/config/env.ts` (mismo patrón Zod que `COHERE_API_KEY`), expuestas por `src/config/app-config.ts`:
+  - `PORTAL_BASE_URL` (`config.portal.baseUrl`) — default `https://webaloe.ulima.edu.pe`. **Validada contra una allowlist de host fija** (`webaloe.ulima.edu.pe`, `isAllowedPortalBaseUrl`) para que no sea un vector de SSRF.
+    `[@test] ../../../test/HU31_jeff/env.portal-allowlist.test.ts`
+  - `PORTAL_TIMEOUT_MS` (`config.portal.timeoutMs`) — default `8000`.
+  - `SYLLABUS_BASE_URL` (`config.syllabus.baseUrl`) — default `https://cactus.ulima.edu.pe`. **Allowlist propia y separada** (`cactus.ulima.edu.pe`, `isAllowedSyllabusBaseUrl`), NO la misma variable que `PORTAL_BASE_URL`: dos variables, cada una fija a un solo host, para que ninguna de las dos pueda apuntarse al sistema de la otra (anti-SSRF). Decisión del owner, 2026-09-02.
+    `[@test] ../../../test/HU31_jeff/env.portal-allowlist.test.ts`
+- Las rutas de las páginas son **constantes del módulo**. Lo único interpolado en una URL es el `COCICLO` (`^\d{5}$`) y, para sílabos, además el `courseCode` (`^\d{4,6}$`), ambos validados antes de usarse. Ningún otro valor del HTML entra en una URL. Solo se descargan `matricula` y `record` del portal: no se pide ninguna página cuyo contenido no lea después ningún módulo.
+  `[@test] ../../../test/HU31_jeff/portal.client.test.ts`
+- Envía las cookies recibidas en la cabecera `Cookie` y un `User-Agent` de navegador. **No sigue redirecciones**: un 302 a `inicio.jsp` es sesión inválida.
+- Decodifica el cuerpo con el charset del `Content-Type` (default ISO-8859-1).
+- **Presupuesto de ejecución**: **cuatro rondas secuenciales**, no tres: `layout.jsp` (de ahí sale el `COCICLO`) → `matricula` ‖ `record` **en paralelo** → los **N sílabos en paralelo** (N = cursos distintos del consolidado; 5 en el fixture, 6-8 en un ciclo normal) → `CustomLogoutServlet`, que `importFromPortal` **espera con `await` en su `finally`** y que pasa por el mismo `fetchPage`, así que carga el mismo `PORTAL_TIMEOUT_MS`. Esa cuarta ronda se había omitido. Techo de la parte de portal ≈ 4 × `PORTAL_TIMEOUT_MS` ≈ **32 s** con el default de 8 s, sobre ~9-11 peticiones salientes. No hay tope de concurrencia sobre los N sílabos: con 5-8 cursos se abren 5-8 conexiones simultáneas a `cactus`, aceptable a esa escala; si N creciera habría que limitarlo. `PORTAL_TIMEOUT_MS` cubre la petición **y** la lectura del cuerpo (`fetch` resuelve al llegar las cabeceras: un host que responde y deja de emitir bytes colgaría la promesa indefinidamente). **Pero ese techo NO es el tiempo del endpoint**: encima va una transacción de ~115 consultas **secuenciales** contra Neon, y ahí manda el RTT. Medición real contra el portal el 2026-09-02, con el backend corriendo en Lima: **40.7 s** la primera importación y **47.7 s** la segunda; la segunda hizo menos trabajo (todo updates, cero creates) y tardó más, o sea que domina la latencia por viaje y no el cómputo. De esos tiempos ~17 s son RTT a Neon desde Lima (~150 ms × ~115 consultas) y desaparecen al correr la función en `iad1`, la región de la base. **No requiere `maxDuration` en `vercel.json`**: con Fluid compute el plan Hobby ya da 300 s por defecto, que es también su tope, así que declararlo solo podría bajarlo (ver `platform-runtime.spec.md`, BR-PLATFORM-10 y BR-PLATFORM-11). Lo que sí importa es que la función siga en `iad1`.
+- Nunca registra cookies, cuerpos HTML ni datos personales; solo URL, status y tamaño. El `errorHandler` global no debe recibir excepciones que lleven HTML del portal en el mensaje: el cliente envuelve todo fallo en `HttpError` con mensaje fijo.
+- Llama a `CustomLogoutServlet` en `finally`, siempre.
+- `fetchSyllabus(cociclo, courseCode, cookies)` — sílabo de un curso (§Sílabos). Reutiliza la MISMA sesión (cookies del portal, ver §SSO), pero apunta a `config.syllabus.baseUrl`, no a `config.portal.baseUrl`. A diferencia de `fetchPage`/`fetchAll`, un sílabo es un dato adicional, no el propósito de la importación: cualquier fallo que NO sea sesión inválida (timeout, error de red, status inesperado) se degrada a `null` en vez de lanzar. Una redirección sigue lanzando el mismo `409 PORTAL_SESSION_INVALID` que `fetchPage` (no existe, a diferencia de `inicio.jsp`/`solicitarValidarToken` en `webaloe`, un marcador conocido de "página de login" de Domino, así que solo la redirección — señal de sesión muerta verificable en HTTP — se trata como tal). Decodifica SIEMPRE como UTF-8 (§Sílabos, gotcha de charset). Ese `409` **hoy no lo consume nadie**: el service lo atrapa junto con cualquier otra excepción y lo degrada a "sin sílabo para ese curso" (§Manejo de errores); se lanza igual para que un llamador futuro pueda distinguirlo. A `cactus` se le mandan **solo las cookies LTPA** (`LtpaToken2`/`LtpaToken`), nunca el `JSESSIONID`: esa es la sesión de WebSphere atada a `webaloe`, un navegador no la mandaría cross-host y solo el LTPA autentica Domino (§SSO).
+  `[@test] ../../../test/HU31_jeff/portal.client.test.ts`
+
+### Parsers (`parsers/*.ts`, funciones puras HTML → DTO)
+
+Regla común de normalización, obligatoria antes de comparar o guardar cualquier texto: **decodificar entidades HTML** (`&Ntilde;`, `&Aacute;`, `&nbsp;`…), colapsar espacios y recortar. `layout.jsp` emite entidades nombradas mientras los servlets emiten bytes acentuados crudos; sin esta regla el mismo docente o curso se duplica según la página de origen.
+`[@test] ../../../test/HU31_jeff/html.test.ts`
+
+- `parseCicloActivo(html)` → `{ cocicloUrl: "20262", periodCode: "2026-2" }`.
+  `[@test] ../../../test/HU31_jeff/parsers.matricula.test.ts`
+- `parseConsolidadoMatricula(html)` → `{ studentCode, careerName, rows: [{ carCode, courseCode, sectionCode, groupCode, courseName, level, credits, attempt }] }`. La fila trae **también** la columna `GR.`; omitirla desalinea un parser posicional.
+  `[@test] ../../../test/HU31_jeff/parsers.matricula.test.ts`
+- `parseAulaVirtual(html)` → `[{ courseCode, courseName, sectionCode, teacherName }]`. Es la fuente del **nombre completo** del curso y del docente. `teacherName` llega como `APELLIDO1 / APELLIDO2 / NOMBRES` y se normaliza a `NOMBRES APELLIDO1 APELLIDO2` en mayúsculas.
+  `[@test] ../../../test/HU31_jeff/parsers.horario.test.ts`
+- `parseHorario(html)` → sesiones. La tabla es de 16 franjas × 6 días = 96 celdas y **el portal emite el atributo `title` en las 96, vacío en las libres** (`<font ... size="1" title>`): su presencia no indica clase. Solo aporta sesión la celda cuyo `title` tenga valor que case con `^\s*(\d{4,6})\s+\S`. La cabecera de hora es `7-8` … `22-23` y se convierte a `HH:MM` (`7-8` → `07:00`–`08:00`). Bloques consecutivos del mismo curso, día y aula se fusionan.
+  `[@test] ../../../test/HU31_jeff/parsers.horario.test.ts`
+- `parseRecordPage(html)` → `{ rows, headerOk, discarded, footer }`, y `parseRecordAcademico(html)` = `recordRows(parseRecordPage(html))` → `[{ periodCode, courseCode, courseName, attempt, credits, grade|null, sectionCode, gradeRaw|null, observation|null }]`, con la forma que fijan **RS-BE-19 y RS-BE-20** de `../academic-record/academic-record.spec.md`. Se lee **por tabla, no por página**: la tabla del récord se ubica por su cabecera normalizada de 12 columnas (`CICLO, COD., ASIGNATURA, VIG., FAC., VEZ, CRD., NOTA, SEC., TOMO, FOLIO, OBSERVACIÓN`) y la del pie por la suya de 10; el mapeo es por índice de columna. La celda `CICLO` solo trae valor en la **primera fila de cada grupo** (`&nbsp;` en las demás): se arrastra el último valor no vacío. `NOTA` vacía = curso en curso; `NOTA` no numérica se trata como sin nota en `grade`, pero el texto de la celda se conserva en `gradeRaw`. Los créditos **no se redondean**. Las filas de datos que no pasan la validación se cuentan en `discarded`, y `footer` es `null` si el pie falta o si alguna de sus celdas numéricas no se lee. Si la tabla no aparece con su cabecera exacta, el lector cae al modo compatible (recorre toda la página, `headerOk: false`) y ese récord nunca es de confianza.
+  `[@test] ../../../test/HU31_jeff/parsers.record.test.ts`
+  `[@test] ../../../test/HU34_jeff/record-parser.test.ts`
+- `parseInfoAcademica(html)` → `{ careerName, general, period, unreadable }`, con la forma que fija **RS-BE-24** de `../academic-record/academic-record.spec.md`. Los bloques "Información General" e "Información por Período" son dos tablas de marcado idéntico separadas solo por el texto rotulador: hay que anclarse en ese rótulo, no en el orden de tablas. De "Información General" salen PPA, ubicación relativa, cursos y créditos convalidados y aprobados, créditos acumulados y créditos requeridos de la especialidad; de "Información por Período", su código de ciclo, promedio, ubicación relativa, nivel y los cursos y créditos convalidados, matriculados, aprobados y desaprobados. Son tres niveles de tablas anidadas, así que el bloque se recorta desde su rótulo hasta el primer cierre de tabla (con regex insensible a mayúsculas: la página mezcla `</table>` y `</TABLE>`). La secuencia normalizada de rótulos de la cabecera se valida antes de leer los valores por posición; si no coincide, todos los campos de ese bloque quedan `null`. Un campo que no se puede leer queda `null` —nunca 0— y su nombre va en `unreadable`, que el service escribe en el log del servidor.
+  `[@test] ../../../test/HU31_jeff/parsers.info.test.ts`
+  `[@test] ../../../test/HU34_jeff/info-academica-parser.test.ts`
+- `parseImpedimentos(html)` → `{ hasImpediment, hasDebt, text }`.
+  `[@test] ../../../test/HU31_jeff/parsers.info.test.ts`
+- `parseSyllabusEntry(json, baseUrl)` → `{ unid, fileName, url } | null` (§Sílabos). La base del host de sílabos llega **por parámetro**, no de `config`: los parsers son puros, y el service le pasa la MISMA base con la que el cliente descargó (leyendo la global se podía descargar de un host y persistir la URL de otro). Valida el `@unid` como `^[0-9A-Fa-f]{1,120}$` antes de meterlo en la URL que se persiste y se entrega al cliente como enlace. **NO** sigue el patrón `{ ok, data|reason }` de arriba: a diferencia de los parsers de HTML del portal, acá "este curso no tiene sílabo" es un resultado legítimo y frecuente, no un fallo, de ahí `null` directo en vez de `reason`. Guarda de longitud antes de devolver: `fileName` (futuro `title`) ≤ 150 y la URL construida ≤ 255 (`syllabus.title`/`drive_file_url`); si excede, `null` — mejor sin sílabo que una fila que la BD rechace y haga rollback de toda la importación.
+  `[@test] ../../../test/HU31_jeff/parsers.silabo.test.ts`
+- Cada parser devuelve `{ ok: true, data } | { ok: false, reason }` (excepto `parseSyllabusEntry`, ver arriba). Un parser que falla **no aborta** la importación (excepto el de identidad): el bloque se omite y se reporta en `warnings`.
+- Fixtures en `test/HU31_jeff/fixtures/`. **Anonimización obligatoria antes de commitear**: sustituir nombre, código de alumno, DNI, carné, brevete, dirección, celular, correo, fecha de nacimiento y placa por valores ficticios. El fixture de `layout.jsp` debe conservarse además en **bytes ISO-8859-1 crudos** para ejercitar la decodificación; guardar solo el UTF-8 ya decodificado no prueba nada de esa ruta. `test/HU31_jeff/fixtures/silabo.json` es una respuesta real de Domino sin datos personales (comprobado antes de commitear).
+
+### Sincronización (`portal-sync.repository.ts`)
+
+Las descargas del portal ocurren **fuera** de la transacción. La transacción se abre recién con todos los DTO en memoria y solo contiene escrituras, para no mantener una conexión abierta durante segundos en Vercel serverless.
+
+Todo upsert usa `ON CONFLICT` sobre una constraint **existente**; nada de read-then-write, porque dos alumnos de la misma sección importan a la vez al inicio del ciclo.
+
+1. **Período** — `academic_period`, clave `code`. `is_active` está protegido por el índice único **parcial** `uq_academic_period_single_active` (no diferible: PostgreSQL lo evalúa fila a fila), así que el orden de sentencias es obligatorio:
+   a. `UPDATE academic_period SET is_active = false WHERE is_active = true AND code <> :code;`
+   b. `INSERT ... ON CONFLICT (code) DO UPDATE SET is_active = true;`
+   Esto cubre el caso "el período ya existe pero está inactivo", que de otro modo dejaría `needsImport` evaluándose contra el ciclo equivocado para siempre.
+   **Guarda**: solo se activa si `:code` es lexicográficamente **mayor o igual** al código del período activo actual, **Y** su fecha de inicio ya llegó (`shouldActivatePeriod` = `periodCodeIsNewer` && `periodHasStarted`, ambas en `portal-sync.repository.ts`). Un alumno importando un ciclo viejo nunca retrocede el ciclo global; y la Universidad publica el calendario de un ciclo (dejándolo disponible para importar) **días antes** de que empiecen las clases, así que sin la guarda de fecha el primer alumno en importar movería el ciclo activo de los 201 alumnos antes de que el ciclo en verdad empezara. La fecha de inicio se conoce ANTES del upsert, de la misma fuente (`KNOWN_PERIOD_CALENDARS`/`defaultPeriodDates`) que usa el paso siguiente; la comparación es en UTC por fecha de calendario (no por hora), igual que el resto del módulo (ver `academicWeekCount`).
+   Cuando el período se **crea** pero la guarda de fecha lo deja inactivo, se reporta `PERIOD_NOT_ACTIVATED_YET`. **Consecuencia de diseño, deliberada**: ese período queda inactivo hasta que una importación POSTERIOR corra en o después de su fecha de inicio (la misma guarda se reevalúa en ese momento); es aceptable, y la advertencia lo hace visible en vez de dejarlo escondido.
+   Al crear se consulta primero `KNOWN_PERIOD_CALENDARS`, la tabla de calendarios académicos **publicados por la Universidad** (`portal-sync.repository.ts`); si el código del ciclo está ahí se usan esas fechas tal cual, autoritativas incluso si el inicio no cayera en lunes. Solo si el ciclo no está en la tabla se cae al cálculo aproximado de siempre según `N` (`1` → 15-mar a 31-jul; `2` → 1-ago a 20-dic; `0` → 5-ene a 28-feb), snapeado al lunes siguiente. `PERIOD_DATES_DEFAULTED` se reporta **solo** cuando el período se creó Y su código no tiene calendario publicado — con calendario publicado las fechas son correctas y no hay nada que avisar. Calendario publicado hoy: `2026-2` → 24-ago-2026 a 14-dic-2026 (owner, 2026-09-02; "sujeto a modificaciones" según la Universidad, se corrige en la tabla si cambia).
+   **Consecuencia de diseño, deliberada**: `is_active` es global y único, así que la primera importación de un ciclo nuevo (con fecha de inicio ya llegada) cambia el ciclo vigente **para los 201 alumnos**. Es semánticamente correcto (un semestre nuevo es global) pero significa que un alumno dispara un cambio que afecta a todos. Ver §Decisiones pendientes.
+   `[@test] ../../../test/HU31_jeff/repository.period.test.ts`
+   `[@test] ../../../test/HU31_jeff/service.import.test.ts`
+2. **Semanas académicas** — al **crear** un período se generan las filas de `academic_week` (`uq_academic_week_period_number`) que cubren su span real, no un número fijo: la cantidad es `academicWeekCount(startDate, endDate)`, el número de semanas de 7 días necesario para cubrir `[start_date, end_date]` (mínimo 1). Un número fijo generaba semanas más allá del fin real cuando el ciclo dura menos (`2026-2`, con calendario publicado, dura 16 semanas exactas). Sin estas filas, `schedule.repository` y `chatbot.repository` no resuelven la "semana N" y el horario queda sin fechas.
+   `[@test] ../../../test/HU31_jeff/repository.period.test.ts`
+3. **Carrera** — **no se busca ni se crea desde el portal**. `student.career_id` y `student.curriculum_id` ya existen y son `NOT NULL`: se usan tal cual. La carrera del portal solo se **compara** con `career.name`; si difiere se reporta `CAREER_MISMATCH` y no se cambia nada. (El código de carrera del portal es `6500`; el de la BD es `SIS`. No son la misma nomenclatura y no deben mapearse a ciegas.)
+4. **Alumno** — `student.current_level` se actualiza al **ciclo del curso obligatorio más bajo que al alumno todavía le falta**, esté pendiente o cursándolo (definición del owner del proyecto, 2026-09-02). NO es el máximo ni el modal de los cursos matriculados este ciclo (ambas derivaciones se probaron y las dos fueron incorrectas): esos solo listan lo que el alumno lleva ESTE ciclo, no dicen si un curso es obligatorio, y no incluyen los cursos que aún no ha llevado — que son justamente los que definen el ciclo. La fuente es la propia base de datos de ULima++, no el portal:
+   - Obligatorio = `curriculum_course.category <> 'elective'` (`general_studies`, `common` y `faculty` son obligatorios; solo `elective` es optativo) dentro de la malla del alumno (`curriculum_course.curriculum_id = student.curriculum_id`).
+   - Pendiente = sin fila en `student_course_progress` para ese `curriculum_course_id` (nunca lo llevó) o con `status` distinto de `approved` (`in_progress`, `failed` o `withdrawn` siguen faltando).
+   - El nivel es el ciclo pendiente más bajo **por encima del ciclo completo más alto** (`levelFromCoverage` sobre `PortalSyncRepository.findCycleCoverage`, `[@test] ../../../test/HU31_jeff/repository.student.test.ts`). Se ejecuta DENTRO de la misma transacción y DESPUÉS del upsert de progreso del paso 10, para ver el progreso que esta misma importación acaba de escribir — antes de ese punto la fila de `student_course_progress` que decide si un curso recién aprobado deja de contar todavía no existe.
+   - **Por qué el recorte, y no un `MIN(cycle)` a secas**: el `MIN` a secas fue lo primero que se implementó y la primera importación REAL (2026-09-02) lo tumbó. El alumno cayó de nivel 8 a 1 porque de sus 52 obligatorios solo 26 tenían fila de `student_course_progress`: los otros 26 están en su récord académico con códigos que no calzan con la malla (convalidaciones, códigos antiguos), y un curso sin fila es indistinguible de uno pendiente. Su ciclo 3 figuraba con los 6 obligatorios sin dato mientras tenía los ciclos 6, 7 y 8 aprobados al 100%. No es un caso raro: le ocurre a cualquier alumno con convalidaciones.
+   - El recorte se apoya en los **prerrequisitos de la malla**: si el ciclo 8 está aprobado entero, un obligatorio de ciclo 3 que figura pendiente no puede ser trabajo real, porque no se llega al 8 sin pasar el 3. Por encima del último ciclo completo sí se miran todos los pendientes: ahí la información es legítima. Con los datos reales del caso, la regla devuelve 9, que es el ciclo correcto.
+   - **Red de seguridad, `levelNeverGoesDown`**: si el cálculo da menos que el `current_level` ya guardado, gana el guardado y se emite `LEVEL_REGRESSION_BLOCKED`. Un alumno no retrocede de ciclo, así que un cálculo más bajo es casi siempre un artefacto de datos incompletos, y creerle es visible para el alumno (la app le mostraría contenido de un ciclo que ya pasó). Se mantiene separada del cálculo a propósito: son dos defensas distintas y conviene poder ver cuál actuó.
+   - Si no queda ningún ciclo pendiente (aprobó todos los obligatorios) o la malla no tiene obligatorios, no se escribe nada y `current_level` queda como estaba.
+   - El resultado se descarta y se reporta (`LEVEL_OUT_OF_RANGE`) si cae fuera de `1..10` (`chk_student_current_level`); esa guarda no cambió.
+   `app_user.full_name` se completa **solo si está vacío**. `app_user.institutional_email` **nunca se toca**: es `NOT NULL UNIQUE` y es el identificador del login con Google.
+   `[@test] ../../../test/HU31_jeff/repository.student.test.ts`
+   `[@test] ../../../test/HU31_jeff/service.import.test.ts`
+5. **Cursos** — `course` por `code` (unique). **Solo crean curso las filas del consolidado de matrícula del ciclo importado**; el récord académico nunca crea `course` (sus nombres vienen truncados a 20 caracteres y sus códigos legados de 4 dígitos ensuciarían el catálogo de la malla). Precedencia del nombre: consolidado > Aula Virtual. `name` es `NOT NULL`, así que "actualizar solo si está vacío" no aplica: se actualiza solo si el nombre entrante es **más largo** que el guardado. `default_credit` = créditos redondeados hacia arriba, mínimo 1 (`chk_course_default_credit > 0`).
+6. **Docentes** — `teacher` **no tiene unique sobre `full_name`**, así que no admite `ON CONFLICT` por nombre. Clave natural sintética: `teacher_code = 'PORTAL:' + slug(fullNameNormalizado)` (`teacher_code` sí es unique).
+
+   **Enmendado el 2026-09-06.** Resolver SOLO por ese código no alcanzaba: las filas sembradas a mano no lo tienen, así que la misma persona se insertaba de nuevo con el nombre en otro orden — el seed guarda `APELLIDOS, NOMBRES` y el portal `NOMBRES APELLIDOS`. En producción eso dejó **11 grupos duplicados**, y como las secciones nuevas colgaban de la copia, un docente con cuenta dejaba de ver sus propias secciones.
+
+   `upsertTeacher` resuelve ahora en tres pasos: (a) por `teacher_code`, camino rápido; (b) por **conjunto de palabras del nombre** (`shared/utils/nombre-persona.ts`), que es lo que hace equivalentes los dos órdenes — si empata una sola fila se reusa, y se le rellena el `teacher_code` si no tenía, sin pisar uno propio como `DOC00x`; (c) recién si nadie empata, `INSERT ... ON CONFLICT (teacher_code) DO UPDATE`, que se conserva como red ante una carrera entre dos importaciones simultáneas. La igualdad es EXACTA: un apellido de más es otra persona. El escaneo de `teacher` (unos cientos de filas, una vez por docente del ciclo) es más barato que el índice de expresión que haría falta, porque lo que cambia entre las dos formas es el ORDEN de las palabras, no su contenido.
+
+   Los duplicados ya creados se repararon con `src/db/seed/fusionar-docentes.ts` (human-gated, 11 grupos, 26 secciones y 20 asesorías repuntadas). El placeholder para cursos sin docente usa `teacher_code = 'PORTAL:SIN-DOCENTE'` y se reporta `TEACHER_MISSING`. `institutional_email` se deja `NULL` (es unique). Crear docentes desde el portal es dato real, no inventado; el placeholder sí es dato sintético y figura en §Decisiones pendientes.
+   `[@test] ../../../test/HU31_jeff/repository.catalog.test.ts`
+7. **Oferta y sección** — `course_offering` por `uq_course_offering (academic_period_id, course_id)`, con `total_hours` resuelto por `resolveOfferingTotalHours` (ver §Horas de clase del ciclo; `attendance-risk` descarta toda sección con `total_hours <= 0`). En este paso todavía no hay horario cargado, así que el valor sale de la malla o, si el curso no está en ella, de los créditos; el paso 8.b lo corrige después con el horario real. `section` por `uq_section_offering_code (course_offering_id, code)`; `teacher_id` se actualiza solo si el actual es el placeholder. `jp_id` no se toca.
+8. **Sesiones de horario** — clave natural real `uq_schedule_session (section_id, day_of_week, start_time)`, **sin `end_time`**: `ON CONFLICT (section_id, day_of_week, start_time) DO UPDATE SET end_time = excluded.end_time, classroom = excluded.classroom`. `color_hex` no se toca. Las sesiones que ya no aparecen no se borran.
+   **8.b Recálculo de horas** — recién acá existen las sesiones, así que después de cargarlas se recalcula `course_offering.total_hours` de las ofertas tocadas en esta importación, usando la suma real de `schedule_session` (ver §Horas de clase del ciclo). Es el único paso que **pisa** el valor en vez de usar `greatest`: el horario es más confiable que la estimación del paso 7, aunque dé un número menor.
+9. **Matrícula** — `enrollment` por `uq_enrollment_student_section`, `status = active`. Las horas de asistencia **no se tocan en este paso**: las escribe el bloque de asistencia, en este mismo bucle y justo después del upsert, que es el único punto donde ya existe el `enrollment.id` (RS-BE-15). **Retiro**: solo se marcan `withdrawn` las matrículas del alumno **cuya sección pertenece al período importado** (join `section → course_offering → academic_period`; `enrollment` no tiene columna de período). **Nunca se ejecuta el retiro si dejaría al alumno con cero matrículas activas**: ambos logins exigen `hasActiveEnrollment` y lo dejarían fuera de la app sin poder volver a importar (RS-BE-8). En ese caso no se retira nada y se reporta `WITHDRAW_SKIPPED_WOULD_LOCK_OUT`. La lista de secciones a conservar (`keep`) es TODA sección tocada en la importación, sin colapsar por curso: dos filas del mismo curso con distinta sección (columna `GR.`) deben conservarse ambas.
+   `[@test] ../../../test/HU31_jeff/repository.student.test.ts`
+   `[@test] ../../../test/HU31_jeff/service.import.test.ts`
+10. **Progreso** — `student_course_progress` por `uq_student_course_progress (student_id, curriculum_course_id)`, con `curriculum_id` (`NOT NULL`) = `student.curriculum_id`. Estado: `approved` si `grade >= 11`, `failed` si `grade < 11`, `in_progress` si no hay nota y la fila es del período activo. Filas de ciclos pasados sin nota numérica se omiten y se reportan. Con varias filas del mismo curso (columna `VEZ`) gana la de **mayor `VEZ`**; a igual `VEZ`, la de ciclo más reciente.
+
+    El `curriculum_course` se resuelve en **dos intentos**, cada uno en UNA sola consulta (no una por curso):
+    a. **Directo** — `course.code` dentro de la malla del alumno (`findCurriculumCourseIds`).
+    b. **Por equivalencia** — solo con los códigos que sobraron de (a): `course_equivalence` por `(curriculum_id, legacy_code)` (`findEquivalentCurriculumCourseIds`). No se consulta si no sobró nada, para no gastar un viaje dentro de la transacción. Ver §Equivalencias de malla.
+
+    Un código que no resuelve por ninguno de los dos se omite y se cuenta en `summary.progressSkipped`, con el warning `PROGRESS_SKIPPED` (convalidaciones, cursos de otra facultad, códigos legados aún sin equivalencia). Lo recuperado por (b) se cuenta aparte en `summary.progressViaEquivalence`.
+
+    **Limpieza de electivos (RS-BE-23).** Justo después de escribir el progreso, y solo con el consentimiento del alumno y un récord de confianza, se borran de `student_course_progress` los electivos `approved` que ninguna fila del récord respalda. Es la única parte de la importación que BORRA progreso: no corre si alguna fila aprobada del récord no resolvió a la malla, ni si el conjunto de respaldo queda vacío. Lo borrado se cuenta en `summary.progressRemoved` y, si es mayor que 0, agrega el warning `PROGRESS_REMOVED`. El respaldo se recalcula sobre TODAS las filas del récord y **no** reutiliza el resultado de (a) y (b) de arriba, que ya descartó las filas sin nota numérica. Ver `specs/features/academic-record/academic-record.spec.md` §RS-BE-23.
+    `[@test] ../../../test/HU34_jeff/electives-cleanup.test.ts`
+    `[@test] ../../../test/HU31_jeff/repository.student.test.ts`
+    `[@test] ../../../test/HU31_jeff/repository.equivalencias.test.ts`
+    `[@test] ../../../test/HU31_jeff/service.equivalencias.test.ts`
+11. **Impedimentos** — si hay deuda o impedimento se hace upsert de **una sola** `alert` por alumno y período, con `type = 'academic_risk'`, `title` (`NOT NULL`) = `"Impedimento de matrícula"` y `message` = el texto del portal. Idempotente: si ya existe una alerta de ese alumno con ese título y mensaje, **no se crea otra aunque esté leída**; solo se actualiza el mensaje si cambió.
+12. **Sílabos** — `syllabus`, con **`on conflict do nothing` SIN conflict target**. Los sílabos de todos los cursos importados se buscan **en paralelo** (§Sílabos, §Cliente del portal) DESPUÉS de resolver la identidad y ANTES de abrir la transacción (misma razón que matrícula/récord: son peticiones de red, no deben mantener la conexión de BD abierta), y se resuelven por **curso**, no por fila: dos secciones del mismo curso comparten una sola oferta y un solo sílabo. Dentro de la transacción, cada sílabo se inserta justo después de que su `course_offering` existe (`upsertOffering`, paso 7), que es la clave que exige `syllabus.course_offering_id`.
+    - **Columnas históricas, decisión del owner (2026-09-02)**: `syllabus.drive_file_id` recibe el UNID de Domino y `syllabus.drive_file_url` la URL de `vSyllabusXCicloAV`. Las columnas conservan sus nombres actuales (`drive_file_id`/`drive_file_url`) SIN migración ni rename, aunque ya no signifiquen solo Google Drive — hoy también guardan la referencia al documento Domino. Comentario en el código donde se escriben, dejando constancia de que el nombre es histórico.
+    - **Por qué sin target**: `syllabus` tiene DOS restricciones únicas, `uq_syllabus_course_offering (course_offering_id)` y `syllabus_drive_file_id_unique (drive_file_id)`. Un target explícito solo cubre la primera; la segunda lanzaría `23505` dentro de la transacción de la importación y la tumbaría entera. Y sí puede ocurrir: que la clave de consulta (`<COCICLO>_<curso>`) sea única no implica que el documento devuelto lo sea — un sílabo compartido por dos códigos de curso aparece, en una vista categorizada de Domino, bajo ambas categorías con el MISMO `@unid`. Sin target, el `do nothing` cubre **todas** las restricciones únicas de la tabla.
+    - **Por qué `do nothing` y no `do update`**: `syllabus` no es una tabla vacía que estrene esta feature. `src/db/seed/index.ts` la llena con enlaces de Google Drive que el visor in-app SÍ abre y que `grades.repository.ts` sirve como `silaboUrl` a TODOS los alumnos de la oferta; además es la fila padre de `assessment`. Pisarla con una URL de Domino protegida por sesión (Decisión pendiente #10) rompía el sílabo de la sección entera por una importación de un solo alumno, sin vuelta atrás desde la app. Nunca se pisa una fila existente.
+    - **Limitaciones conocidas y aceptadas** (decisión del owner, 2026-09-02), consecuencia directa de lo anterior: (a) re-importar el mismo ciclo **NO actualiza** un sílabo republicado — el precio correcto mientras la URL de Domino no sea abrible por el visor (Decisión pendiente #10); (b) un curso cuya oferta ya tenía sílabo sembrado **conserva el enlace de Drive**, no el de Domino, así que tras una importación una oferta puede tener uno u otro según si ya existía la fila.
+    - Que un curso no tenga sílabo es normal y **no** genera advertencia por curso. Si NINGÚN curso del ciclo trajo sílabo se agrega una única advertencia `SYLLABUS_UNAVAILABLE`. Se decide **fuera de la transacción**, justo después de la fase de descarga, y NO desde `summary.syllabiUpserted`: con el `do nothing`, cero escrituras ya no significa "no hay sílabos" — puede significar que todas las ofertas ya tenían fila. El mensaje **no afirma** que el portal no publicó nada: desde el backend no se distingue "no hay sílabo" de "cactus caído", "sesión de Domino muerta" o "todas las peticiones expiraron".
+    - `summary.syllabiUpserted` cuenta **filas efectivamente escritas**, no intentos: `upsertSyllabus` devuelve `null` cuando el `do nothing` no escribió nada, y quien llama nunca lee `rows[0]` a ciegas.
+    - **Un fallo de sílabo (red, sesión, parseo o al guardar) nunca aborta el resto de la importación**: la descarga y el parseo se degradan a `null` por curso (§Manejo de errores), y el guardado no puede lanzar un `23505` porque el `on conflict do nothing` sin target cubre las dos restricciones únicas de la tabla. Lo que sí abortaría la transacción es un valor que la BD rechace por longitud, y por eso el parser descarta de antemano `title` > 150, `drive_file_url` > 255 y `drive_file_id` > 120 (§Parsers).
+    - **Limitación conocida, no resuelta acá** (ver §Decisiones pendientes): la URL guardada apunta a un documento Domino protegido por sesión. El visor de sílabos embebido de la app Flutter, que hoy abre URLs de Google Drive, **no podrá abrir esta URL sin una sesión de Domino**. Queda para que el owner decida.
+    `[@test] ../../../test/HU31_jeff/parsers.silabo.test.ts`
+    `[@test] ../../../test/HU31_jeff/portal.client.test.ts`
+    `[@test] ../../../test/HU31_jeff/repository.syllabus.test.ts`
+    `[@test] ../../../test/HU31_jeff/service.import.test.ts`
+
+### Horas de clase del ciclo (`total_hours`)
+
+`course_offering.total_hours` es el **denominador** del porcentaje de inasistencia de `attendance-risk`, que decide el umbral de impedido (25% hasta ciclo 5, 35% desde ciclo 6) y dispara las alertas de HU30. Hasta ahora se calculaba como `créditos × 16`, y eso está mal: los créditos no son horas de clase.
+
+**Medido el 2026-09-06 contra la BD real** (las 12 ofertas del período activo 2026-2 que tienen datos) y contra el plan de estudios oficial 2026-1 de Ingeniería de Sistemas:
+
+| Curso | `créditos × 16` (actual) | Horas reales (`TOT × 16`) | Error |
+| --- | --- | --- | --- |
+| PARADIGMAS DE PROGRAMACIÓN | 48 h | 80 h | −40% |
+| ANÁLISIS Y DISEÑO DE ALGORITMOS | 48 h | 80 h | −40% |
+| PROPUESTA DE INVESTIGACIÓN | 48 h | 80 h | −40% |
+| INGENIERÍA DE SOFTWARE II | 64 h | 96 h | −33% |
+| SEMINARIO DE INVESTIGACIÓN I | 64 h | 96 h | −33% |
+| CIBERSEGURIDAD, SEGURIDAD DE SISTEMAS | 64 h | 80 h | −20% |
+| ERP, PLANEAMIENTO, DEVOPS, ANALÍTICA, GESTIÓN DE PROYECTOS | 48 h | 64 h | −25% |
+
+Las 12 dan exactamente `default_credit × 16`, sin una sola excepción. Un denominador chico **infla** el porcentaje de inasistencia: en PARADIGMAS el alumno aparece impedido a las 12 h de falta cuando el límite real son 20 h. Hoy no se nota porque `enrollment.absent_hours` está en 0 para todo el período activo, pero se activaría el día que entre asistencia real, y `attendance-risk.notifyStudents` manda esas alertas a alumnos de verdad (ver RS-BE-10 en `specs/features/attendance-risk/attendance-risk.spec.md`).
+
+**Fuente de verdad: el horario.** La suma de `schedule_session` de la sección coincide **12 de 12** con la columna TOT del plan oficial. El dato correcto ya está en la BD; solo no se estaba usando.
+
+**Precedencia** (`resolveOfferingTotalHours`, función pura en `portal-sync.repository.ts`), siempre `horas semanales × semanas del período` (`academicWeekCount`, no un 16 fijo: 2026-1 dura 17 semanas):
+
+1. `schedule` — suma real de `schedule_session` de la sección. Se aplica en el paso 8.b.
+2. `curriculum` — `course.weekly_hours` de la malla oficial. Cubre las ofertas sin horario importado (62 de 74 en el período activo).
+3. `credits` — créditos como proxy de horas semanales. Último recurso, y una degradación conocida.
+
+Un factor semanal en 0 o nulo **no** es fuente: una sección sin sesiones cae al escalón siguiente en vez de fijar el total en 0 (con 0, `attendance-risk` descarta la sección entera).
+
+**Columna nueva** (cambio de BD aditivo, requiere aprobación explícita):
+
+| columna | tipo | nota |
+| --- | --- | --- |
+| `course.weekly_hours` | `smallint NULL` | horas de clase semanales según la malla (columna TOT del plan de estudios). `NULL` = el curso no está en la malla cargada. |
+
+Migración **`drizzle/0010_course_weekly_hours.sql`** (0008 ya está tomada por `course_equivalence` y aplicada), idempotente (`ADD COLUMN IF NOT EXISTS`), con `chk_course_weekly_hours CHECK (weekly_hours IS NULL OR weekly_hours > 0)`.
+
+> **Aplicarla con `bun run db:apply drizzle/0010_course_weekly_hours.sql`, no con `db:migrate`.** Verificado el 2026-09-06 contra Neon: la BD tiene **10 filas selladas** en `drizzle.__drizzle_migrations` contra **8 entradas** en `drizzle/meta/_journal.json` (`0001_course_offering_total_hours` y `0002_app_user_linkedin_link` se aplicaron fuera del journal). `db:apply` va archivo por archivo en una transacción y no depende de ese journal desalineado.
+
+**Seed de referencia** `src/db/seed/malla_horas.ts`: las 71 filas del plan de estudios oficial 2026-1 de Ingeniería de Sistemas (código, horas TEO/PRA/TOT), matcheadas por `course.code`. Verificado: **71 de 71 cruzan** con `course.code` y los créditos coinciden al 100% con `course.default_credit`, o sea que el documento y la BD hablan del mismo catálogo. Solo escribe `weekly_hours`; no crea cursos ni toca ninguna otra columna. Mismo criterio que `course_equivalence`: dato de referencia extraído de un documento oficial de la Universidad, no dato mock.
+
+**Backfill.** Las ofertas ya escritas conservan su `créditos × 16` hasta que alguien vuelva a importar. Corregirlas de una vez requiere un `UPDATE` sobre datos existentes y va como paso aprobado aparte, no dentro de la importación. Cualquier `UPDATE` masivo debe llevar `and ap.is_active = true`: sin eso se pisan las 257 filas con horas del período cerrado 2026-1, cuyo origen nadie conoce y que sirven como conjunto de contraste.
+
+### Equivalencias de malla (`course_equivalence`)
+
+La malla de Ingeniería de Sistemas cambió al plan **2026-1**, y en la BD hay **una sola** malla (`curriculum` id 1) de la que cuelgan todos los alumnos. El récord académico, en cambio, es histórico: un alumno de ciclo alto trae buena parte de sus cursos con los códigos de la malla anterior, que ya no existen en `curriculum_course`. Con solo el match directo del paso 10.a esas filas se omiten para siempre.
+
+Medido sobre el récord real de un alumno (`spike-portal/fixtures/10_gada_servlets_ComandoListarRecordAcademico_ac_1.html`, fuera del repo): de **53 cursos aprobados, 27 calzan por código y 26 no**.
+
+**Tabla** `course_equivalence` (migración `drizzle/0008_course_equivalence.sql`):
+
+| columna | tipo | nota |
+| --- | --- | --- |
+| `id` | identity PK | |
+| `curriculum_id` | → `curriculum.id` | la malla **destino** (la vigente) |
+| `legacy_code` | `varchar(30)` | el código tal como lo trae el récord |
+| `curriculum_course_id` | integer | el curso equivalente en la malla vigente |
+| `source` | `varchar(120)` | de qué documento oficial salió la equivalencia |
+
+- `uq_course_equivalence (curriculum_id, legacy_code)`: un código legado tiene **una** equivalencia por malla.
+- FK **compuesta** `(curriculum_course_id, curriculum_id)` → `uq_curriculum_course_id_curriculum`, en vez de una simple a `curriculum_course.id`: hace imposible que una equivalencia apunte a un curso de otra malla. Ese único ya existía en el esquema sin ninguna FK que lo usara.
+- N→1 permitido a propósito (dos cursos viejos fusionados en uno nuevo); no hay unique sobre `curriculum_course_id`.
+- `legacy_code` **no** es FK a `course.code`: los códigos viejos no están en `course` y no deben crearse ahí (paso 5: el récord nunca crea `course`).
+
+**Desempate antes de escribir.** El segundo intento hace posible que dos filas del récord caigan en el mismo `curriculum_course`, algo que con solo el match directo no podía pasar porque el llamador ya agrupa por código. Importa porque `upsertProgressBatch` lleva `distinct on (curriculum_course_id)` **sin `order by`**: dos filas con la misma clave darían un ganador arbitrario. Reglas, aplicadas en el service antes del upsert (`ganaProgreso`):
+
+1. El match **directo gana** sobre el de equivalencia. Si el alumno tiene en su récord el código viejo y el nuevo del mismo curso, manda lo que dice el código vigente.
+2. A igual procedencia gana el **mejor estado**: `approved` > `in_progress` > `failed`. Aprobar la mitad de un curso fusionado no se pierde porque su otra mitad esté desaprobada. (`student_course_status` también tiene `withdrawn`, pero el récord nunca lo produce.)
+
+**Seed** — `src/db/seed/equivalencias.ts` (`bun run db:seed:equivalencias`), human-gated con `--apply` igual que `db:seed:docentes`: dry-run por defecto. Las parejas viven como datos en `equivalencias.logic.ts` en la forma `código legado → código vigente`, y el seed resuelve el código vigente contra `curriculum_course` al aplicar: los ids de `curriculum_course` **no se hardcodean nunca**, son de la instancia y no del documento. Un código vigente que no exista en la malla se **reporta y no se inserta**. Avisa además si un código "legado" sigue vivo en la malla vigente (sería letra muerta: el match directo ya lo resuelve). Es `on conflict do nothing`, así que re-correrlo es inocuo, y solo escribe en `course_equivalence`: no crea cursos ni toca el progreso de ningún alumno.
+`[@test] ../../../test/HU31_jeff/seed.equivalencias.test.ts`
+
+**Cobertura actual y hueco declarado.** El seed arranca con las **14** equivalencias de facultad (ciclos 3-7) que da `tabla_de_equivalencia_de_plan_de_estudios_v3.pdf`. Ese documento es **2025-1 ↔ 2025-0**, de una generación anterior, y por eso no cubre los **12** restantes del caso medido, todos de Estudios Generales: `6505`, `510002`, `510001`, `6506`, `6382`, `6510`, `5686`, `650001`, `6512`, `6513`, `1472`, `4380`. Para esos hace falta la tabla oficial **2026-1 ↔ 2025-1**, que aún no se tiene. **No se inventan**: viven en `SIN_EQUIVALENCIA_CONOCIDA` con una prueba que verifica que NO estén en la tabla, y entran al seed cuando exista el documento. Mientras tanto siguen contando en `PROGRESS_SKIPPED`.
+
+**El piso por nivel se queda.** `approvedLevelsFor` (`src/modules/auth/auth.repository.ts`) y el recorte de `levelFromCoverage` (paso 4) **no se tocan**. Esta tabla mejora el emparejamiento pero no lo completa —los 12 de EEGG, más convalidaciones y cursos de otra facultad, siguen sin mapear—, así que el piso sigue siendo la red de seguridad y no un parche temporal.
+
+### Fuera de alcance explícito
+
+- Boletas de pago, cuenta corriente, datos laborales, información vehicular, DNI, dirección, celular, fecha de nacimiento, brevete, carné y anuncios del buzón (`tab=1`): **no se descargan ni se guardan**.
+- Ciclos pasados no crean `section`, `enrollment` ni `course`: solo alimentan `student_course_progress`.
+- No se persiste fecha de última sincronización **para esta feature**: `needsImport` se deriva de la matrícula en el período activo. **Enmendado por `../academic-record/academic-record.spec.md` (RS-BE-25)**: la copia del récord sí guarda su `student_academic_snapshot.synced_at`, que es la fecha de la copia visible y **no** interviene en `needsImport` ni en `GET /portal-sync/status`.
+
+### Privacidad y base legal
+
+- La pantalla del WebView debe mostrar, antes del login, qué datos se importarán y con qué finalidad, y requiere aceptación explícita del alumno (consentimiento informado, Ley 29733 de Protección de Datos Personales del Perú). Sin aceptación no se abre el portal.
+- Inventario de datos importados: nombre completo, código de alumno, carrera, nivel, cursos, secciones, docentes, horarios, matrícula, notas históricas y estado de impedimento/deuda. Con `consent: true` (**RS-BE-29**) se agregan, y solo entonces: la copia del récord académico (ciclo, código y nombre del curso, vez, créditos, nota, sección y observación), el promedio ponderado acumulado, la ubicación relativa, los cursos y créditos convalidados y aprobados, los créditos acumulados y requeridos, y el resumen del último ciclo (promedio, ubicación, nivel y cursos y créditos convalidados, matriculados, aprobados y desaprobados). Nada más. *Propuesta del 2026-09-25 y aprobada por el dueño el 2026-09-26 (`recarga-portal.spec.md`, RS-BE-59), con la implementación en `feat/recarga-notas-asistencia`, sin mergear.* La recarga `POST /portal-sync/refresh` agrega, con su propio aviso de consentimiento, las notas parciales por evaluación del ciclo en curso (nombre, semana, peso y nota o su marca) y la hora de cada lectura de notas y de asistencia. No guarda la mínima ni la máxima de la clase ni los agregados del panel Nota.
+- El alumno puede pedir el borrado de lo importado. Para los datos que agrega `academic-record` el procedimiento es **autoservicio**: `DELETE /academic-record/me` (**RS-BE-27**). Ver la decisión #7 abajo.
+- Antes de implementar se requiere autorización escrita del área de Sistemas de la Universidad para que una app reciba cookies de sesión del portal institucional.
+
+### Manejo de errores
+
+- Toda la escritura ocurre en una transacción; si una regla lanza un error no controlado no queda nada a medias.
+- Los errores por bloque parseable se degradan a `warnings`; identidad, sesión inválida, portal caído y timeout abortan con los códigos indicados.
+- **Excepción**: un fallo al buscar el sílabo de un curso — incluida una sesión inválida detectada en `cactus.ulima.edu.pe` (`fetchSyllabus` lanzando el mismo `409` que `fetchPage`) — **nunca aborta la importación** (§Sincronización paso 12). Se captura por curso, fuera de la transacción, y se degrada a "sin sílabo para ese curso". El camino de **guardado** cumple lo mismo por construcción, no por captura: el `on conflict do nothing` sin target no puede levantar un conflicto de unicidad (§Sincronización paso 12).
+- Un `23505` sobre `uq_academic_period_single_active` es un **bug de orden en el repository**, no un error del portal: el test debe cubrir "BD con `2026-1` activo + portal en `2026-2`".
+
+### DTO validation
+
+- Body de `POST /portal-sync/import`: `cookies.JSESSIONID` y `cookies.LtpaToken2` string 1..4096 obligatorios; `cookies.LtpaToken` opcional; `consent` booleano opcional (RS-BE-29) — un valor que no sea booleano se rechaza con `400`, no se descarta. Cualquier otra clave se ignora. El body nunca se registra en logs.
+  `[@test] ../../../test/HU31_jeff/schemas.import.test.ts`
+  `[@test] ../../../test/HU34_jeff/consent-gate.test.ts`
+
+## Decisiones
+
+Aprobadas por el owner del proyecto el 2026-09-02:
+
+| # | Decisión | Resolución |
+| --- | --- | --- |
+| 1 | Nota final oficial | **APROBADA**: se agrega `enrollment.final_grade decimal(4,2) NULL` con migración Drizzle. La nota del récord se guarda ahí además de derivar `approved`/`failed`. `[@test] ../../../test/HU31_jeff/schema.final-grade.test.ts` |
+| 3 | Cambio global de ciclo | **APROBADA**: la primera importación de un ciclo nuevo, cuya fecha de inicio ya llegó, activa ese `academic_period` para todos los alumnos, con la guarda de que solo avanza y nunca retrocede, y de que no activa antes de que el ciclo en verdad empiece (`PERIOD_NOT_ACTIVATED_YET` si se crea antes de esa fecha). |
+| 4 | Docente placeholder | **APROBADA**: se permite `teacher_code = 'PORTAL:SIN-DOCENTE'` como dato sintético, única excepción a la regla de no inventar datos, porque `section.teacher_id` es `NOT NULL`. |
+| 8 | Reutilizar columnas de sílabo para Domino | **APROBADA**: `syllabus.drive_file_id`/`syllabus.drive_file_url` guardan el UNID y la URL de Domino. Se mantienen sus nombres actuales, SIN migración ni rename, aunque el nombre ya no describa solo Google Drive (§Sincronización paso 12). |
+| 9 | Allowlist de dos hosts para las peticiones salientes | **APROBADA**: se agrega `cactus.ulima.edu.pe` junto a `webaloe.ulima.edu.pe`, cada uno con su propia variable de entorno y su propio predicado de allowlist (`SYLLABUS_BASE_URL`/`isAllowedSyllabusBaseUrl`), no una sola variable aceptando ambos. Fija en código; ningún llamador puede influirla. |
+
+Resueltas por diseño, sin cambio de BD:
+
+| # | Decisión | Resolución |
+| --- | --- | --- |
+| 5 | `maxDuration` en `vercel.json` | **RESUELTA (2026-09-02)**: no se declara. Con Fluid compute el plan Hobby ya da 300 s por defecto y por tope, verificado contra la API de Vercel; declarar un número solo podría bajarlo. Lo que sí se fijó es `regions: ["iad1"]`. Ver `platform-runtime.spec.md`, BR-PLATFORM-10 y BR-PLATFORM-11. |
+| 6 | Ubicación de tests | `test/HU31_jeff/`, siguiendo el patrón `test/HU<NN>_<owner>/`. Renombrar si el equipo asigna otro número de HU. |
+
+Pendiente, no bloquea el desarrollo:
+
+| # | Decisión | Por qué importa |
+| --- | --- | --- |
+| 10 | El visor de sílabos de la app Flutter no puede abrir la URL de Domino guardada | La URL de `syllabus.drive_file_url` apunta a un documento **protegido por sesión** en Domino (§Sílabos, §SSO), a diferencia de las URLs de Google Drive que el visor in-app maneja hoy: sin una sesión de Domino, el visor no podrá abrirla directamente. Alcance real desde que el upsert es `on conflict do nothing` (§Sincronización paso 12): solo afecta a las ofertas que NO tenían fila `syllabus`; donde ya había un enlace de Drive sembrado, ese enlace se conserva. No se resuelve en esta feature; queda documentado para que el owner decida (¿proxear la descarga por el backend con la sesión del alumno? ¿abrir en navegador externo? ¿otra cosa?). |
+
+Reabiertas y resueltas por `../academic-record/academic-record.spec.md`, aprobada por el dueño el 2026-09-18:
+
+| # | Decisión | Resolución |
+| --- | --- | --- |
+| 2 | PPA y ubicación relativa | **REABIERTA y APROBADA (2026-09-18)**: sí se extraen y sí se guardan, con cambio de BD (`student_academic_snapshot` y `student_period_summary`, migración `0011_academic_record.sql`), y los consume la pantalla de récord académico. Solo con `consent: true` y un récord de confianza (RS-BE-24, RS-BE-25, RS-BE-29). |
+| 7 | Procedimiento de borrado de los datos importados a pedido del alumno | **RESUELTA (2026-09-18)** a favor del **autoservicio**, para los datos que agrega `academic-record`: `DELETE /academic-record/me` borra la copia del récord, la foto y el resumen del alumno, y no toca `student_course_progress` (RS-BE-27). El resto del inventario de esta spec sigue sin procedimiento de borrado propio. |
+
+## Verification
+
+- `bun test test/HU31_jeff/` cubre cada parser contra fixtures reales anonimizados, incluido un fixture en bytes ISO-8859-1 crudos y otro (`silabo.json`) en la respuesta JSON real de Domino sin datos personales. Los 15 archivos de test y qué verifica cada uno están enlazados inline junto a cada regla en §Rules; `[@test]` arriba.
+- Casos de servicio cubiertos con repository y cliente fake (sin BD real): identidad no verificable (`403`/`422`) y no escribe nada; retiro que dejaría cero matrículas activas se omite y advierte; el logout del portal ocurre siempre, incluso si la importación falla; dos filas del consolidado con el mismo curso y distinta sección (`GR.`) llegan ambas al `keep` del retiro. `[@test] ../../../test/HU31_jeff/service.import.test.ts`
+- Sílabos, a nivel de servicio: se cuenta un sílabo por curso cuando el portal los devuelve; una única `SYLLABUS_UNAVAILABLE` cuando ninguno trae sílabo (caso por defecto), con un mensaje que no afirma una causa que no se comprobó; un sílabo parcial no advierte por curso; un fallo del cliente (excepción de red) al buscar el sílabo NO aborta el resto de la importación ni cambia el resto del `summary`; dos secciones del mismo curso comparten oferta y el sílabo se escribe UNA sola vez; `syllabiUpserted` cuenta filas escritas (una oferta que ya tenía sílabo no suma) y NO se advierte `SYLLABUS_UNAVAILABLE` cuando hubo sílabos aunque no se escribiera ninguna fila; la URL persistida se arma con la base del cliente que descargó. `[@test] ../../../test/HU31_jeff/service.import.test.ts`
+- Sílabos, a nivel de repository (sin BD, inspeccionando la consulta generada): el upsert usa `on conflict do nothing` **sin target** y sin ningún `set`, escribe oferta/título/UNID/URL en ese orden, devuelve la fila cuando el insert escribió y `null` cuando el `do nothing` no escribió nada. `[@test] ../../../test/HU31_jeff/repository.syllabus.test.ts`
+- Sílabos, a nivel de parser: UNID, filename y URL armada contra el fixture real (incluidos sus escapes JSON inválidos, `\!`/`\>`); un filename con `\<PARTE 1\>` sale sin barras invertidas ni `%5C`; un cuerpo que ya era JSON válido no se rompe; `@unid` con traversal, con query o no hexadecimal ⇒ `null`; se recorren las `viewentry` y se toma la primera usable; un filename con apóstrofo se lee completo y uno que además contiene `')` no se trunca en ese cierre falso (el nombre está anclado a terminar en `.pdf`; un adjunto que no sea PDF degrada a `null`); la URL se arma con la base recibida por parámetro; `viewentry` vacío y JSON malformado degradan a `null`; guardas de longitud de `title`(150)/`drive_file_url`(255)/`drive_file_id`(120). `[@test] ../../../test/HU31_jeff/parsers.silabo.test.ts`
+- Sílabos, a nivel de cliente: URL armada contra `cactus.ulima.edu.pe` con `COCICLO_courseCode`; decodificación SIEMPRE UTF-8 pese a un `Content-Type` distinto; redirección ⇒ `409`; status inesperado y error de red ⇒ `null`; `cociclo`/`courseCode` con formato inválido ⇒ `null` sin llegar a pedir la red; a `cactus` solo se le mandan las cookies LTPA y a `webaloe` las tres; un cuerpo que nunca termina de llegar corta por timeout (504 en `fetchPage`, `null` en `fetchSyllabus`) en vez de colgar la importación. `[@test] ../../../test/HU31_jeff/portal.client.test.ts`
+- Casos de repository cubiertos como funciones puras: avance de ciclo `2026-1` → `2026-2` sin retroceder (`[@test] ../../../test/HU31_jeff/repository.period.test.ts`); la decisión de activación (`periodHasStarted`/`shouldActivatePeriod`) contra fecha de inicio pasada/futura, con y sin período activo previo, y código más viejo que nunca activa aunque su fecha ya haya llegado (`[@test] ../../../test/HU31_jeff/repository.period.test.ts`); sesión de portal inválida vía `inicio.jsp`/`solicitarValidarToken` (`[@test] ../../../test/HU31_jeff/portal.client.test.ts`).
+- A nivel de servicio: se cubre tanto el camino donde el período activa normalmente (fecha de inicio ya llegada, sin advertencia) como el que crea el período pero lo deja inactivo por la guarda de fecha, reportando `PERIOD_NOT_ACTIVATED_YET` (`[@test] ../../../test/HU31_jeff/service.import.test.ts`).
+- Pendientes de una base de datos real (no cubiertos por los tests unitarios anteriores, que usan fakes): importar dos veces deja el mismo estado (con el `do nothing`, la segunda importación no reescribe el sílabo); un UNID repetido entre dos ofertas no rompe la importación del segundo alumno; una fila `syllabus` sembrada con enlace de Drive sobrevive intacta a una importación; segundo alumno en la misma sección no crea sección nueva; el `23505` de `uq_academic_period_single_active` no ocurre en la primera importación de un ciclo nuevo.
+- Fixtures faltantes que hay que conseguir para ampliar cobertura: un segundo alumno (para probar sección compartida), una nota desaprobada y una nota no numérica. Los fixtures actuales son de un solo alumno con `VEZ = 1`.
+- Prueba manual pendiente (requiere la migración `drizzle/0004_portal_sync_final_grade.sql` aplicada y sesión real de miUlima): importar y verificar `GET /schedule/me/sessions`, `GET /curriculum/me` y `GET /portal-sync/status` → `needsImport = false`.
+- **Pendiente de comprobar contra el host real, con prioridad**: que `cactus.ulima.edu.pe` acepte la sesión con **solo las cookies LTPA**. El SSO se verificó empíricamente el 2026-09-02 mandando las TRES cookies (§SSO); quitar el `JSESSIONID` fue un razonamiento, no una medición. Si Domino lo necesitara, TODOS los sílabos degradarían a `null` y la única señal sería `SYLLABUS_UNAVAILABLE`, que a propósito ya no nombra causa: la regresión se leería como "la Universidad no publicó sílabos". Se confirma en la misma prueba manual: si `syllabiUpserted` es 0 con cursos que sí tienen sílabo publicado, esta es la primera sospecha.
+- **`PORTAL_TIMEOUT_MS` (8 s) revisado bajo su semántica nueva, 2026-09-02**: el timeout cubre ahora la respuesta completa, incluida la lectura del cuerpo. En las dos importaciones reales (40.7 s y 47.7 s) **ninguna ronda agotó sus 8 s**, así que el default se mantiene en 8000. Subirlo encarecería el peor caso sin evidencia: cada segundo que se le agregue multiplica por CUATRO el techo de la parte de portal, porque son cuatro rondas secuenciales. Si aparecen `504 PORTAL_TIMEOUT` con WebSphere frío, se sube acá.
+- **Limitación asumida (no es defecto)**: si una categoría de Domino trae varias entradas y la primera usable no es la más reciente, la fila se estrena con el sílabo viejo, y con `on conflict do nothing` eso ya no se corrige re-importando. Se aceptó junto con la decisión de nunca pisar una fila existente; si llegara a molestar, se resuelve eligiendo por fecha en vez de por orden.

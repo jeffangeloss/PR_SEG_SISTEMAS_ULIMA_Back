@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Secretos (nunca versionar)
+service-account*.json
+*-firebase-adminsdk-*.json
+*.p12
+*.pem
+*log-export*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Bun (gestor de paquetes canónico — bun.lock SÍ se versiona)
+bun.lockb
+
+# npm: no versionar package-lock.json (el lockfile canónico es bun.lock)
+package-lock.json
+
+# Drizzle: tras el re-baseline (TT04) se retoma el flujo oficial de drizzle-kit,
+# así que TODAS las migraciones (drizzle/*.sql) y el meta se versionan.
+# (Antes se ignoraban con excepciones por archivo; ya no hace falta.)
+
+# Testing
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Backups de BD: NUNCA versionar (contienen hashes y datos de producción)
+backup_*.sql
+*.dump
+
+# Mutation testing (Stryker)
+.stryker-tmp/
+reports/
+.vercel
+.env*
+# Esta negación va después de .env*, porque un patrón posterior anula la del comienzo del archivo.
+!.env.example
+# Plantilla de la variante de laboratorio; su copia .env.laboratorio queda ignorada.
+!.env.laboratorio.example
+
+# Datos del Postgres del laboratorio, por si LAB_DIR apuntara dentro del repo.
+.lab/
+
+# Salidas del extractor de asesorías: Excel/PDF de la facultad con Zoom personales, NO se versionan.
+scripts/out/

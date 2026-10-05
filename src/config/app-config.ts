@@ -1,0 +1,46 @@
+import { env } from "./env.js";
+
+export const config = {
+  db: {
+    url: env.DATABASE_URL,
+  },
+  /** Fotos de perfil. `enabled` en false deja la feature apagada sin romper
+   *  nada: todos se siguen viendo con iniciales. */
+  cloudinary: {
+    cloudName: env.CLOUDINARY_CLOUD_NAME,
+    apiKey: env.CLOUDINARY_API_KEY,
+    apiSecret: env.CLOUDINARY_API_SECRET,
+    get enabled() {
+      return Boolean(env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET);
+    },
+  },
+  auth: {
+    jwtSecret: env.JWT_SECRET,
+    jwtExpiresIn: env.JWT_EXPIRES_IN,
+    passwordResetMaxPerHour: env.PASSWORD_RESET_MAX_PER_HOUR,
+  },
+  email: {
+    resendApiKey: env.RESEND_API_KEY,
+    resendFrom: env.RESEND_FROM,
+    replyTo: env.RESEND_REPLY_TO,
+  },
+  firebase: {
+    projectId: env.FIREBASE_PROJECT_ID,
+    clientEmail: env.FIREBASE_CLIENT_EMAIL,
+    privateKey: env.FIREBASE_PRIVATE_KEY,
+    databaseUrl: env.FIREBASE_DATABASE_URL,
+  },
+  server: {
+    port: env.PORT,
+    env: env.NODE_ENV,
+    isProduction: env.NODE_ENV === "production",
+    isDevelopment: env.NODE_ENV === "development",
+    corsOrigins: env.CORS_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean) ?? [],
+  },
+  chatbot: {
+    cohereApiKey: env.COHERE_API_KEY,
+    rateLimit: env.CHATBOT_RATE_LIMIT,
+  },
+} as const;
+
+export type AppConfig = typeof config;
